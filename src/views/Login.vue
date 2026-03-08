@@ -3,7 +3,7 @@
     <!-- 左上角logo区（Logo + 系统名） -->
     <div class="brand">
       <img class="brand__logo" :src="logoUrl" alt="logo" />
-      <div class="brand__title">元器件物理状态1</div>
+      <div class="brand__title">元器件物理状态管理系统</div>
     </div>
 
     <!-- 登录界面 -->
