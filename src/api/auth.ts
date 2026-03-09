@@ -1,45 +1,22 @@
-// 用户认证相关API接口
+// 用户认证相关API接口（JWT：login data 为 token 字符串）
 
 import { request } from './http'
 
-export interface UserInfo {
-  id: number
-  username: string
-  role: 0 | 1
-  dept: string
-}
+export type JwtToken = string
 
-export interface LoginResponseData {
-  user: UserInfo
-}
-
-export interface MeResponseData {
-  user: UserInfo
-}
-
-/**
- * 用户登录
- */
 export function apiLogin(username: string, password: string) {
-  return request<LoginResponseData>('/auth/login', {
+  return request<JwtToken>('/auth/login', {
     method: 'POST',
     body: { username, password },
   })
 }
 
 /**
- * 用户登出
+ * 退出登录：后端无状态，调不调都行；按文档提供 loginOut
  */
 export function apiLogout() {
-  return request<null>('/auth/logout', {
+  return request<null>('/auth/loginOut', {
     method: 'POST',
     body: {},
   })
-}
-
-/**
- * 获取当前用户信息（cookie会话）
- */
-export function apiMe() {
-  return request<MeResponseData>('/auth/me', { method: 'GET' })
 }

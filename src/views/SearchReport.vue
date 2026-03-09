@@ -4,7 +4,6 @@
       <div style="font-weight:700">检索报告</div>
     </template>
 
-    <!-- ✅ 取消三步：所有条件放在一个表单里；关键词在最上面 -->
     <el-form label-width="110px" style="max-width: 980px">
       <!-- 关键词（放在检索条件上面） -->
       <el-form-item label="关键词">
@@ -29,12 +28,17 @@
 
       <!-- 类别 -->
       <el-form-item label="报告类别" required>
-        <el-select v-model="query.category" placeholder="请选择类别" style="width: 260px" @change="onCategoryChange">
-          <el-option v-for="c in categories" :key="c" :label="c" :value="c" />
+        <el-select
+          v-model="query.category"
+          placeholder="请选择类别"
+          style="width: 260px"
+          @change="onCategoryChange"
+        >
+          <el-option v-for="c in categories" :key="c.value" :label="c.label" :value="c.value" />
         </el-select>
       </el-form-item>
 
-      <!-- ✅ 新检索条件：型号规格、元器件门类、厂家信息、批号 -->
+      <!-- 新检索条件：型号规格、元器件门类、厂家信息、批号 -->
       <el-form-item label="型号规格">
         <el-input v-model="query.modelSpec" placeholder="请输入型号规格" clearable />
       </el-form-item>
@@ -56,7 +60,6 @@
         <el-button type="primary" :loading="loadingSearch" @click="doSearch(true)">检索</el-button>
         <el-button :disabled="loadingSearch" @click="resetForm">重置</el-button>
 
-        <!-- ✅ 对比按钮：必须选 2~3 条 -->
         <el-button
           type="success"
           :disabled="selectedRows.length < 2 || selectedRows.length > 3"
@@ -73,7 +76,6 @@
 
     <el-divider />
 
-    <!-- ✅ 结果表格：增加多选列用于对比 -->
     <el-table
       :data="result"
       style="width: 100%"
@@ -83,11 +85,25 @@
       <el-table-column type="selection" width="48" />
 
       <el-table-column prop="fileName" label="报告名称" min-width="240" />
-      <el-table-column prop="category" label="类别" width="120" />
+
+      <!-- 类别：映射显示 -->
+      <el-table-column label="类别" width="140">
+        <template #default="{ row }">
+          {{ categoryLabel(row.category) }}
+        </template>
+      </el-table-column>
+
       <el-table-column prop="modelSpec" label="型号规格" min-width="160" />
       <el-table-column prop="deviceCategory" label="元器件门类" min-width="150" />
       <el-table-column prop="vendor" label="厂家信息" min-width="160" />
       <el-table-column prop="batchNo" label="批号" min-width="140" />
+
+      <!-- 状态：1001/1002/1003 映射展示（新增列，不改变现有功能） -->
+      <el-table-column label="状态" width="120">
+        <template #default="{ row }">
+          {{ statusLabel(row.status) }}
+        </template>
+      </el-table-column>
 
       <el-table-column label="操作" width="200">
         <template #default="{ row }">
@@ -108,7 +124,7 @@
       />
     </div>
 
-    <!-- 单份预览对话框（保留） -->
+    <!-- 单份预览对话框 -->
     <el-dialog v-model="previewVisible" title="报告预览" width="80%" top="5vh" :destroy-on-close="true">
       <div style="height: 75vh">
         <iframe v-if="previewUrl" :src="previewUrl" style="width: 100%; height: 100%; border: 0" />
@@ -121,7 +137,7 @@
       </template>
     </el-dialog>
 
-    <!-- ✅ 新增：对比预览弹窗（2-3 份并排） -->
+    <!-- 对比预览弹窗（2-3 份并排） -->
     <el-dialog v-model="compareVisible" title="报告对比预览" width="92%" top="4vh" :destroy-on-close="true">
       <div class="compare" :style="{ gridTemplateColumns: `repeat(${compareRows.length || 1}, 1fr)` }">
         <div v-for="r in compareRows" :key="r.reportId" class="compare__col">
@@ -143,20 +159,52 @@ import { ElMessage } from 'element-plus'
 import { apiQueryKeywords } from '../api/keywords'
 import { apiSearchReports, type ReportListItem, type SearchReportsResponseData } from '../api/reports'
 
-const categories = ['DPA', '单项检测', '失效分析', '结构分析', '电性能测试', '其他检测'] as const
+/**
+ * 类别：后端字典 1-6
+ * 1 DPA
+ * 2 测试报告
+ * 3 FA 报告
+ * 4 CA 报告
+ * 5 二次测试报告
+ * 6 定制报告
+ */
+const categories = [
+  { label: 'DPA 报告', value: 1 },
+  { label: '测试报告', value: 2 },
+  { label: 'FA 报告', value: 3 },
+  { label: 'CA 报告', value: 4 },
+  { label: '二次测试报告', value: 5 },
+  { label: '定制报告', value: 6 },
+] as const
 
-// ✅ 取消步骤
-// const activeStep = ref(0)
+type CategoryValue = (typeof categories)[number]['value']
+
+const categoryLabel = (v: unknown) => {
+  const n = typeof v === 'number' ? v : Number(v)
+  const hit = categories.find((x) => x.value === n)
+  return hit?.label ?? (v == null ? '' : String(v))
+}
+
+/**
+ * 状态：后端字典 1001/1002/1003
+ */
+const statusLabel = (v: unknown) => {
+  const n = typeof v === 'number' ? v : Number(v)
+  if (n === 1001) return '待处理'
+  if (n === 1002) return '已通过'
+  if (n === 1003) return '已拒绝'
+  return v == null ? '' : String(v)
+}
 
 const query = reactive<{
-  category: string
+  category: CategoryValue | null
   modelSpec: string
   deviceCategory: string
   vendor: string
   batchNo: string
   keywords: string[]
 }>({
-  category: '',
+  category: null,
   modelSpec: '',
   deviceCategory: '',
   vendor: '',
@@ -173,32 +221,28 @@ const result = ref<ReportListItem[]>([])
 const loadingKeywords = ref(false)
 const loadingSearch = ref(false)
 
-// 单份预览
 const previewVisible = ref(false)
 const previewUrl = ref('')
 
-// ✅ 新增：对比相关状态
 const selectedRows = ref<ReportListItem[]>([])
 const compareVisible = ref(false)
 const compareRows = ref<ReportListItem[]>([])
 
 const onCategoryChange = () => {
-  // ✅ 类别改变：清空已选关键词与候选，避免跨类别混用
   query.keywords = []
   keywordOptions.value = []
 }
 
 const onKeywordsVisibleChange = async (visible: boolean) => {
-  // ✅ 下拉展开时再加载关键词，减少无意义请求
   if (!visible) return
   if (!query.category) return ElMessage.warning('请先选择类别')
-
-  // 已加载过就不重复加载
   if (keywordOptions.value.length > 0) return
 
   loadingKeywords.value = true
   try {
-    const data = await apiQueryKeywords(query.category)
+    // 说明：你要求“不改原 API”，因此这里用 any 兜一下类型差异；
+    // 后端补接口时可让 keywords/query 支持 number category，届时去掉 any。
+    const data = await apiQueryKeywords(query.category as any)
     keywordOptions.value = data.keywords || []
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : '加载关键词失败'
@@ -216,7 +260,7 @@ const doSearch = async (resetToFirstPage = false) => {
   try {
     const data: SearchReportsResponseData = await apiSearchReports({
       filters: {
-        category: query.category,
+        category: query.category as any,
         modelSpec: query.modelSpec.trim(),
         deviceCategory: query.deviceCategory.trim(),
         vendor: query.vendor.trim(),
@@ -243,7 +287,7 @@ const onPageChange = async (p: number) => {
 }
 
 const resetForm = () => {
-  query.category = ''
+  query.category = null
   query.modelSpec = ''
   query.deviceCategory = ''
   query.vendor = ''
@@ -257,7 +301,6 @@ const resetForm = () => {
 }
 
 const reportFileUrl = (row: ReportListItem) => {
-  // 加 t 避免 iframe 缓存导致切换不同报告不刷新
   return `/api/v1/reports/file?reportId=${encodeURIComponent(row.reportId)}&t=${Date.now()}`
 }
 
@@ -277,7 +320,6 @@ const openReport = (row: ReportListItem) => {
 
 const downloadReport = (row: ReportListItem) => {
   const a = document.createElement('a')
-  // ✅ 优先用 attachment（若后端不支持 disposition 参数，也不会影响下载）
   a.href = `/api/v1/reports/file?reportId=${encodeURIComponent(row.reportId)}&disposition=attachment`
   a.download = row.fileName || 'report'
   document.body.appendChild(a)
@@ -285,7 +327,6 @@ const downloadReport = (row: ReportListItem) => {
   a.remove()
 }
 
-// ✅ 对比：选择 2~3 条
 const onSelectionChange = (rows: ReportListItem[]) => {
   selectedRows.value = rows
 }
@@ -300,7 +341,6 @@ const openCompare = () => {
 </script>
 
 <style scoped>
-/* ✅ 对比弹窗：网格并排 iframe */
 .compare {
   display: grid;
   gap: 12px;

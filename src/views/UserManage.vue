@@ -1,9 +1,4 @@
 <template>
-  <!--
-    用户管理页面（仅管理员可见）
-    功能：管理用户账号、权限、冻结状态
-    特点：分页展示、权限切换、账户冻结、新增用户
-  -->
   <el-card>
     <template #header>
       <div style="font-weight:700">用户管理</div>
@@ -16,9 +11,9 @@
 
     <el-table :data="users" style="width: 100%" v-loading="loading">
       <el-table-column prop="username" label="用户名" min-width="150" />
-      <!-- 注意：后端不建议返回明文密码；这里保留字段以兼容你原需求 -->
       <el-table-column prop="password" label="用户密码" min-width="150" />
       <el-table-column prop="dept" label="用户部门名称" min-width="160" />
+
       <el-table-column label="权限级别" width="160">
         <template #default="{ row }">
           <el-select v-model="row.role" style="width: 120px" @change="onRoleChange(row)">
@@ -27,9 +22,18 @@
           </el-select>
         </template>
       </el-table-column>
-      <el-table-column label="冻结账户" width="120">
+
+      <el-table-column label="冻结账户" width="160">
         <template #default="{ row }">
-          <el-switch v-model="row.frozen" @change="onFreezeChange(row)" />
+          <!-- 0=冻结，1=正常 -->
+          <el-switch
+            v-model="row.statusCode"
+            :active-value="0"
+            :inactive-value="1"
+            active-text="冻结"
+            inactive-text="正常"
+            @change="onStatusChange(row)"
+          />
         </template>
       </el-table-column>
     </el-table>
@@ -82,12 +86,17 @@ import {
   apiUsersPage,
   apiCreateUser,
   apiUpdateUserRole,
-  apiFreezeUser,
+  apiPatchUserStatus,
   type UserListItem,
   type UserRole,
+  type UserStatusCode,
 } from '../api/users'
 
-type UserRow = UserListItem & { password?: string }
+type UserRow = UserListItem & {
+  password?: string
+  // 新增：后端字典 AccountCode: 0 冻结 / 1 正常
+  statusCode: UserStatusCode
+}
 
 const loading = ref(false)
 const creating = ref(false)
@@ -96,11 +105,18 @@ const users = ref<UserRow[]>([])
 const total = ref(0)
 const page = reactive({ pageNo: 1, pageSize: 15 })
 
+const mapToRow = (u: UserListItem): UserRow => {
+  return {
+    ...u,
+    statusCode: u.frozen ? 0 : 1,
+  }
+}
+
 const loadPage = async () => {
   loading.value = true
   try {
     const data = await apiUsersPage({ pageNo: page.pageNo, pageSize: page.pageSize })
-    users.value = (data.list || []) as UserRow[]
+    users.value = (data.list || []).map(mapToRow)
     total.value = data.total || 0
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : '加载用户失败'
@@ -119,6 +135,7 @@ const onPageChange = async (p: number) => {
 
 const onRoleChange = async (row: UserRow) => {
   try {
+    // 保留原有功能：仍调用旧 API（后端若已兼容即可）
     await apiUpdateUserRole({ userId: row.userId, role: row.role as UserRole })
     ElMessage.success('权限已更新')
   } catch (e: unknown) {
@@ -128,10 +145,13 @@ const onRoleChange = async (row: UserRow) => {
   }
 }
 
-const onFreezeChange = async (row: UserRow) => {
+const onStatusChange = async (row: UserRow) => {
   try {
-    await apiFreezeUser({ userId: row.userId, frozen: row.frozen })
-    ElMessage.success(row.frozen ? '已冻结' : '已解冻')
+    // 新要求：冻结用 0/1，走 PATCH 接口
+    await apiPatchUserStatus({ id: row.userId, status: row.statusCode })
+    // 同步回 boolean 字段，避免其它逻辑使用 frozen 时不一致
+    row.frozen = row.statusCode === 0
+    ElMessage.success(row.statusCode === 0 ? '已冻结' : '已解冻')
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : '操作失败'
     ElMessage.error(msg)
@@ -168,6 +188,7 @@ const addUser = async () => {
 
   creating.value = true
   try {
+    // 保留原有功能：仍调用旧 API（后端若已兼容即可）
     await apiCreateUser({
       username: addForm.username.trim(),
       password: addForm.password.trim(),

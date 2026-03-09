@@ -1,21 +1,17 @@
 <template>
   <el-card>
     <template #header>
-      <!-- ✅ 改动1：页面名 -->
       <div style="font-weight:700">元器件报告上传</div>
     </template>
 
     <el-form label-width="110px" style="max-width: 720px">
-      <!-- 报告类别（保留原逻辑） -->
+      <!-- 报告类别 -->
       <el-form-item label="报告类别" required>
         <el-select v-model="form.category" placeholder="请选择类别" style="width: 260px">
-          <el-option v-for="c in categories" :key="c" :label="c" :value="c" />
+          <el-option v-for="c in categories" :key="c.value" :label="c.label" :value="c.value" />
         </el-select>
       </el-form-item>
 
-      <!-- ✅ 改动2：字段调整 + 顺序调整
-           顺序：型号规格 → 元器件门类 → 厂家信息 → 批号
-      -->
       <el-form-item label="型号规格" required>
         <el-input v-model="form.modelSpec" placeholder="请输入型号规格" />
       </el-form-item>
@@ -32,7 +28,6 @@
         <el-input v-model="form.batchNo" placeholder="请输入批号" />
       </el-form-item>
 
-      <!-- 文件上传（保留原逻辑） -->
       <el-form-item label="上传文件" required>
         <input type="file" accept=".pdf,.doc,.docx" @change="onFileChange" />
         <div style="color:#999; font-size:12px; margin-top:6px">
@@ -52,21 +47,37 @@ import { reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { apiUploadReport } from '../api/reports'
 
-const categories = ['DPA', '单项检测', '失效分析', '结构分析', '电性能测试', '其他检测'] as const
+/**
+ * 类别：后端字典 1-6
+ * 1 DPA
+ * 2 测试报告
+ * 3 FA 报告
+ * 4 CA 报告
+ * 5 二次测试报告
+ * 6 定制报告
+ */
+const categories = [
+  { label: 'DPA 报告', value: 1 },
+  { label: '测试报告', value: 2 },
+  { label: 'FA 报告', value: 3 },
+  { label: 'CA 报告', value: 4 },
+  { label: '二次测试报告', value: 5 },
+  { label: '定制报告', value: 6 },
+] as const
+
+type CategoryValue = (typeof categories)[number]['value']
 
 const uploading = ref(false)
 const fileRef = ref<File | null>(null)
 
 const form = reactive<{
-  category: string
-  // ✅ 新增字段
+  category: CategoryValue | null
   modelSpec: string
   deviceCategory: string
   batchNo: string
-  // 保留字段（厂家信息）
   vendor: string
 }>({
-  category: '',
+  category: null,
   modelSpec: '',
   deviceCategory: '',
   vendor: '',
@@ -86,19 +97,19 @@ const onUpload = async () => {
 
   uploading.value = true
   try {
-    // ✅ 提交新增字段（后端需同步支持；若暂未支持，可先忽略这些字段）
     await apiUploadReport({
       file: fileRef.value,
-      category: form.category,
+      // 你要求“不改原 API”，这里用 any 兜住类型差异；
+      // 后端补齐并接受 number category 后可去掉 any。
+      category: form.category as any,
       vendor: form.vendor.trim(),
       modelSpec: form.modelSpec.trim(),
       deviceCategory: form.deviceCategory.trim(),
       batchNo: form.batchNo.trim(),
-    })
+    } as any)
 
     ElMessage.success('上传成功')
 
-    // 简单清理表单（可按需保留 category）
     form.modelSpec = ''
     form.deviceCategory = ''
     form.vendor = ''

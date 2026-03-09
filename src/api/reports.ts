@@ -4,19 +4,22 @@ import { request } from './http'
 import { USE_MOCK_API } from '../config/dev'
 import { mockReportsSearch } from './mock'
 
-export type ReportStatus = 'PENDING' | 'APPROVED' | 'REJECTED'
+// 后端字典：1001/1002/1003；兼容旧实现字符串状态
+export type ReportStatusCode = 1001 | 1002 | 1003
+export type ReportStatusText = 'PENDING' | 'APPROVED' | 'REJECTED'
+export type ReportStatus = ReportStatusCode | ReportStatusText
+
+// 后端字典：category 1-6；兼容旧实现 string 类别
+export type ReportCategory = number | string
 
 export interface UploadReportParams {
   file: File
-  category: string
-  // ✅ 改动：新增字段（对应上传页面）
+  category: ReportCategory
+
   modelSpec?: string
   deviceCategory?: string
   vendor?: string
   batchNo?: string
-  // ❌ 删除：prodDate/address（上传页面已移除）
-  // prodDate?: string
-  // address?: string
 }
 
 export interface UploadReportResponseData {
@@ -34,15 +37,13 @@ export interface ApproveReportParams {
 export interface ReportListItem {
   reportId: number
   fileName: string
-  category: string
+  category: ReportCategory
 
-  // ✅ 改动：报告元信息（可选，后端返回就展示/用于检索）
   modelSpec?: string
   deviceCategory?: string
   vendor?: string
   batchNo?: string
 
-  // 兼容旧字段（如果后端仍保留，也不影响）
   prodDate?: string
   address?: string
 
@@ -51,15 +52,13 @@ export interface ReportListItem {
 }
 
 export interface ReportSearchFilters {
-  category: string
+  category: ReportCategory
 
-  // ✅ 新增：与上传页面一致的检索字段（是否启用由后端决定）
   modelSpec?: string
   deviceCategory?: string
   vendor?: string
   batchNo?: string
 
-  // 兼容旧字段
   prodDate?: string
   address?: string
 
@@ -85,15 +84,13 @@ export interface ReportDetailResponseData {
   report: {
     reportId: number
     fileName: string
-    category: string
+    category: ReportCategory
 
-    // ✅ 新增：详情可返回这些字段
     modelSpec?: string
     deviceCategory?: string
     vendor?: string
     batchNo?: string
 
-    // 兼容旧字段
     prodDate?: string
     address?: string
 
@@ -116,17 +113,13 @@ export function apiUploadReport({
 }: UploadReportParams) {
   const fd = new FormData()
   fd.append('file', file)
-  fd.append('category', category)
+  // FormData 必须 string/blob
+  fd.append('category', String(category))
 
-  // ✅ 改动：追加新字段
   if (modelSpec) fd.append('modelSpec', modelSpec)
   if (deviceCategory) fd.append('deviceCategory', deviceCategory)
   if (vendor) fd.append('vendor', vendor)
   if (batchNo) fd.append('batchNo', batchNo)
-
-  // ❌ 删除：prodDate/address（上传页面已移除）
-  // if (prodDate) fd.append('prodDate', prodDate)
-  // if (address) fd.append('address', address)
 
   return request<UploadReportResponseData>('/reports/upload', {
     method: 'POST',
@@ -135,7 +128,7 @@ export function apiUploadReport({
 }
 
 /**
- * 审批报告
+ * 审批报告（若后端暂未启用也不影响）
  */
 export function apiApproveReport({ reportId, approved, comment }: ApproveReportParams) {
   return request<null>('/reports/approve', {
