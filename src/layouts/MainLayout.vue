@@ -9,8 +9,8 @@
       <el-menu :default-active="activePath" router style="border-right: none">
         <el-menu-item index="/upload">上传报告</el-menu-item>
         <el-menu-item index="/search">检索报告</el-menu-item>
-        <el-menu-item index="/keywords">关键词管理（管理员）</el-menu-item>
-        <el-menu-item index="/users">用户管理（管理员）</el-menu-item>
+        <el-menu-item v-if="auth.isAdmin" index="/keywords">关键词管理</el-menu-item>
+        <el-menu-item v-if="auth.isAdmin" index="/users">用户管理</el-menu-item>
       </el-menu>
     </el-aside>
 
