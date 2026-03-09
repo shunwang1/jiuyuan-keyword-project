@@ -148,7 +148,7 @@ export function mockKeywordsReset() {
 
 export interface MockReportsSearchParams {
   filters: {
-    category?: string
+    category?: string | number
 
     // ✅ 改动：上传页面字段变更后，mock 搜索条件同步调整
     modelSpec?: string
@@ -164,7 +164,7 @@ export interface MockReportsSearchParams {
 export interface MockReportListItem {
   reportId: number
   fileName: string
-  category: string
+  category: string | number
 
   // ✅ 改动：返回字段同步调整
   modelSpec?: string

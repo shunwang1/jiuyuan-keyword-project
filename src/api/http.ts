@@ -76,8 +76,13 @@ export async function request<T = unknown>(path: string, options: RequestOptions
   }
 
   const isFormData = typeof FormData !== 'undefined' && options.body instanceof FormData
+  const isUrlSearchParams =
+    typeof URLSearchParams !== 'undefined' && options.body instanceof URLSearchParams
+
   if (!isFormData && options.body != null && !headers['Content-Type']) {
-    headers['Content-Type'] = 'application/json'
+    headers['Content-Type'] = isUrlSearchParams
+      ? 'application/x-www-form-urlencoded;charset=UTF-8'
+      : 'application/json'
   }
 
   const resp = await fetch(url, {
@@ -88,6 +93,8 @@ export async function request<T = unknown>(path: string, options: RequestOptions
         ? undefined
         : isFormData
           ? (options.body as FormData)
+          : isUrlSearchParams
+            ? (options.body as URLSearchParams).toString()
           : typeof options.body === 'string'
             ? options.body
             : JSON.stringify(options.body),

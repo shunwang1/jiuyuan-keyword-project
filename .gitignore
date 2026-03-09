@@ -28,6 +28,10 @@ coverage
 
 .eslintcache
 
+# Generated Vue SFC artifacts (Volar/VLS)
+*.vue.js
+*.vue.js.map
+
 # Cypress
 /cypress/videos/
 /cypress/screenshots/

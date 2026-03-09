@@ -144,9 +144,44 @@ export async function apiSearchReports({ filters, page }: SearchReportsParams) {
   if (USE_MOCK_API) {
     return mockReportsSearch({ filters, page }) as SearchReportsResponseData
   }
+
+  const params = new URLSearchParams()
+
+  // required
+  params.set('category', String(filters.category))
+
+  // optional (backend expects repeated keyword=xxx)
+  for (const kw of filters.keywords || []) {
+    const s = (kw ?? '').toString().trim()
+    if (s) params.append('keyword', s)
+  }
+
+  const modelSpec = (filters.modelSpec ?? '').toString().trim()
+  if (modelSpec) params.set('modelSpec', modelSpec)
+
+  // front: deviceCategory -> backend: componentCategory
+  const componentCategory = (filters.deviceCategory ?? '').toString().trim()
+  if (componentCategory) params.set('componentCategory', componentCategory)
+
+  // front: vendor -> backend: manufacture
+  const manufacture = (filters.vendor ?? '').toString().trim()
+  if (manufacture) params.set('manufacture', manufacture)
+
+  // front: batchNo -> backend: batchNumber
+  const batchNumber = (filters.batchNo ?? '').toString().trim()
+  if (batchNumber) params.set('batchNumber', batchNumber)
+
+  // page/pageSize (backend: default page=1, max pageSize=15)
+  const p = Number(page.pageNo)
+  if (Number.isFinite(p) && p > 0) params.set('page', String(Math.floor(p)))
+
+  const ps = Number(page.pageSize)
+  if (Number.isFinite(ps) && ps > 0) params.set('pageSize', String(Math.min(15, Math.floor(ps))))
+
   return request<SearchReportsResponseData>('/reports/search', {
     method: 'POST',
-    body: { filters, page },
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: params,
   })
 }
 
