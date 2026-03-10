@@ -5,7 +5,6 @@
     </template>
 
     <el-form label-width="110px" style="max-width: 980px">
-      <!-- 类别：动态从 /categories/query 获取 -->
       <el-form-item label="报告类别" required>
         <el-select
           v-model="query.categoryId"
@@ -22,7 +21,6 @@
         </div>
       </el-form-item>
 
-      <!-- 关键词 -->
       <el-form-item label="关键词">
         <el-select
           v-model="query.keywords"
@@ -40,7 +38,6 @@
         </el-select>
       </el-form-item>
 
-      <!-- 型号规格 -->
       <el-form-item label="型号规格">
         <el-select
           v-model="query.modelSpec"
@@ -55,7 +52,6 @@
         </el-select>
       </el-form-item>
 
-      <!-- 元器件门类 -->
       <el-form-item label="元器件门类">
         <el-select
           v-model="query.componentCategory"
@@ -70,7 +66,6 @@
         </el-select>
       </el-form-item>
 
-      <!-- 厂家信息 -->
       <el-form-item label="厂家信息">
         <el-select
           v-model="query.manufacturerName"
@@ -85,7 +80,6 @@
         </el-select>
       </el-form-item>
 
-      <!-- 批号 -->
       <el-form-item label="批号">
         <el-select
           v-model="query.batchNumber"
@@ -100,7 +94,6 @@
         </el-select>
       </el-form-item>
 
-      <!-- 操作按钮 -->
       <el-form-item>
         <el-button type="primary" :loading="loadingSearch" @click="doSearch(true)">检索</el-button>
         <el-button :disabled="loadingSearch" @click="resetForm">重置</el-button>
@@ -197,7 +190,6 @@
       />
     </div>
 
-    <!-- 单份预览 -->
     <el-dialog
       v-model="previewVisible"
       title="报告预览"
@@ -217,7 +209,6 @@
       </template>
     </el-dialog>
 
-    <!-- 对比预览 -->
     <el-dialog
       v-model="compareVisible"
       title="报告对比预览"
@@ -258,9 +249,6 @@ import {
 } from '../api/reports'
 
 type CategoryRow = { id: number; category: string }
-type FileBlobResult = { blob: Blob; fileName: string }
-
-// 为了兼容后端返回的不同字段名，放宽行类型
 type ReportRow = ReportListItem & {
   componentCategory?: string
   manufacturerName?: string
@@ -268,7 +256,6 @@ type ReportRow = ReportListItem & {
   batchNumber?: string
 }
 
-// 动态类别
 const categories = ref<CategoryRow[]>([])
 const loadingCategories = ref(false)
 
@@ -460,54 +447,38 @@ const onSelectionChange = (rows: ReportRow[]) => {
   selectedRows.value = rows
 }
 
-/* ===========================
- * 下载文件名解析（增强版）
- * =========================== */
+function parseDownloadFileName(disposition: string): string {
+  let fileName = 'download'
 
-function decodeFileNameSafely(value: string): string {
-  const s = String(value || '').trim()
-  if (!s) return ''
-  try {
-    return decodeURIComponent(s)
-  } catch {
-    return s
-  }
-}
-
-function stripQuotes(value: string): string {
-  return String(value || '').trim().replace(/^"(.*)"$/, '$1')
-}
-
-function sanitizeDownloadFileName(value: string, fallbackName: string): string {
-  const fallback = String(fallbackName || '').trim() || 'download'
-  const name = String(value || '').trim()
-  if (!name) return fallback
-  const cleaned = name.replace(/[\\/:*?"<>|]/g, '_').trim()
-  return cleaned || fallback
-}
-
-function extractFileNameFromContentDisposition(disposition: string | null, fallbackName: string): string {
-  const fallback = String(fallbackName || '').trim() || 'download'
-  if (!disposition) return fallback
-
-  const utf8Match = disposition.match(/filename\*\s*=\s*UTF-8''([^;]+)/i)
-  if (utf8Match?.[1]) {
-    const decoded = decodeFileNameSafely(stripQuotes(utf8Match[1]))
-    return sanitizeDownloadFileName(decoded, fallback)
+  const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i)
+  if (utf8Match) {
+    try {
+      fileName = decodeURIComponent(utf8Match[1])
+    } catch {
+      fileName = utf8Match[1]
+    }
+  } else {
+    const normalMatch = disposition.match(/filename="?([^";]+)"?/i)
+    if (normalMatch) {
+      fileName = normalMatch[1]
+    }
   }
 
-  const quotedMatch = disposition.match(/filename\s*=\s*"([^"]+)"/i)
-  if (quotedMatch?.[1]) return sanitizeDownloadFileName(quotedMatch[1], fallback)
-
-  const plainMatch = disposition.match(/filename\s*=\s*([^;]+)/i)
-  if (plainMatch?.[1]) return sanitizeDownloadFileName(stripQuotes(plainMatch[1]), fallback)
-
-  return fallback
+  return fileName
 }
 
-/* ===========================
- * blob 预览/打开/下载
- * =========================== */
+async function getDownloadResource(reportId: number | string) {
+  const res = await apiReportFileBlob(reportId)
+  const disposition =
+    res.headers.get('content-disposition') ||
+    res.headers.get('Content-Disposition') ||
+    ''
+
+  const fileName = parseDownloadFileName(disposition)
+  const blob = new Blob([res.blob])
+
+  return { blob, fileName }
+}
 
 const previewVisible = ref(false)
 const previewUrl = ref('')
@@ -525,20 +496,8 @@ function cleanupPreviewUrl() {
   previewUrl.value = ''
 }
 
-async function getFileBlobResult(row: ReportRow): Promise<FileBlobResult> {
-  const res = await apiReportFileBlob(row.reportId)
-  const disposition =
-    res.headers.get('content-disposition') ||
-    res.headers.get('Content-Disposition') ||
-    ''
-
-  const fileName = extractFileNameFromContentDisposition(disposition, row.fileName || 'report')
-
-  return { blob: res.blob, fileName }
-}
-
 async function getBlobUrlByRow(row: ReportRow) {
-  const { blob } = await getFileBlobResult(row)
+  const { blob } = await getDownloadResource(row.reportId)
   return URL.createObjectURL(blob)
 }
 
@@ -578,27 +537,21 @@ const openReport = async (row: ReportRow) => {
 const downloadReport = async (row: ReportRow) => {
   downloadLoadingId.value = row.reportId
   try {
-    const { blob, fileName } = await getFileBlobResult(row)
-    const url = URL.createObjectURL(blob)
-
+    const { blob, fileName } = await getDownloadResource(row.reportId)
+    const url = window.URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = fileName || row.fileName || 'report'
+    a.download = fileName
     document.body.appendChild(a)
     a.click()
     a.remove()
-
-    URL.revokeObjectURL(url)
+    window.URL.revokeObjectURL(url)
   } catch (e: unknown) {
     ElMessage.error(e instanceof Error ? e.message : '下载失败')
   } finally {
     downloadLoadingId.value = null
   }
 }
-
-/* ===========================
- * 对比预览
- * =========================== */
 
 const compareVisible = ref(false)
 const compareItems = ref<Array<{ reportId: number; fileName: string; url: string; loading: boolean }>>([])

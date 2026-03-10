@@ -2,10 +2,10 @@
 // 报告管理相关API接口（按当前前后端联调需求整理）
 // - 上传
 // - 搜索
-// - 文件下载（blob + headers）
+// - 文件下载（原生 fetch 获取 blob + headers）
 // - 上传页下拉 query/add/delete
 
-import { request, type BlobResponse } from './http'
+import { request, type BlobResponse, JWT_TOKEN_LS_KEY } from './http'
 import { USE_MOCK_API } from '../config/dev'
 import { mockReportsSearch } from './mock'
 
@@ -94,6 +94,14 @@ export interface ReportDetailResponseData {
   }
 }
 
+function readToken(): string | null {
+  try {
+    return localStorage.getItem(JWT_TOKEN_LS_KEY)
+  } catch {
+    return null
+  }
+}
+
 export function apiUploadReport(params: UploadReportParams) {
   const fd = new FormData()
   fd.append('file', params.file)
@@ -109,17 +117,56 @@ export function apiUploadReport(params: UploadReportParams) {
   })
 }
 
-export function apiReportFileBlob(id: number | string) {
-  return request<BlobResponse>(`/reports/file?id=${encodeURIComponent(id)}`, {
+/**
+ * 下载报告文件（原生 fetch）
+ * GET /api/v1/reports/file?id=1
+ * 请求头：token
+ * 返回：blob + headers + status
+ */
+export async function apiReportFileBlob(id: number | string): Promise<BlobResponse> {
+  const token = readToken()
+  const url = `/api/v1/reports/file?id=${encodeURIComponent(id)}`
+
+  const headers: Record<string, string> = {}
+  if (token) headers.token = token
+
+  const resp = await fetch(url, {
     method: 'GET',
-    responseType: 'blob',
+    headers,
   })
+
+  if (!resp.ok) {
+    let message = `HTTP ${resp.status}`
+
+    try {
+      const ct = resp.headers.get('content-type') || ''
+      if (ct.includes('application/json')) {
+        const payload = await resp.json()
+        message = payload?.msg || message
+      } else {
+        const text = await resp.text()
+        if (text) message = text
+      }
+    } catch {
+      // ignore
+    }
+
+    throw new Error(message)
+  }
+
+  const blob = await resp.blob()
+
+  return {
+    blob,
+    headers: resp.headers,
+    status: resp.status,
+  }
 }
 
 /**
  * 搜索报告
  * 兼容当前联调：
- * - category 可传数字ID，也可传类别名
+ * - category 传数字ID
  * - 结果兼容 list/records/rows
  */
 export async function apiSearchReports({ filters, page }: SearchReportsParams): Promise<SearchReportsResponseData> {
@@ -129,10 +176,8 @@ export async function apiSearchReports({ filters, page }: SearchReportsParams): 
 
   const params = new URLSearchParams()
 
-  // 类别：允许传 number 或 string
   params.set('category', String(filters.category))
 
-  // 关键词：重复 keyword 参数
   for (const kw of filters.keywords || []) {
     const s = (kw ?? '').toString().trim()
     if (s) params.append('keyword', s)
