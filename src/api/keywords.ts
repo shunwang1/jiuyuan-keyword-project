@@ -17,7 +17,7 @@ export interface KeywordsQueryResponseData {
  * - 直接返回 string[]
  * - 返回 { keywords: string[] }
  * - 返回 { list: string[] }
- * - 返回 { data: { keywords/list } }（如果某些网关又包了一层）
+ * - 返回 { data: { keywords/list } }
  */
 export async function apiQueryKeywords(categoryId: number): Promise<KeywordsQueryResponseData> {
   if (USE_MOCK_API) return mockKeywordsQuery(String(categoryId))
@@ -31,15 +31,12 @@ export async function apiQueryKeywords(categoryId: number): Promise<KeywordsQuer
     return []
   }
 
-  // 1) string[]
   if (Array.isArray(raw)) return { keywords: pickList(raw) }
 
-  // 2) { keywords: [] } / { list: [] }
   if (raw && typeof raw === 'object') {
     if (Array.isArray(raw.keywords)) return { keywords: pickList(raw.keywords) }
     if (Array.isArray(raw.list)) return { keywords: pickList(raw.list) }
 
-    // 3) { data: { keywords/list } }
     const d = (raw as any).data
     if (d && typeof d === 'object') {
       if (Array.isArray(d.keywords)) return { keywords: pickList(d.keywords) }
@@ -60,7 +57,7 @@ export async function apiAddKeyword(params: { categoryId: number; keyword: strin
   if (USE_MOCK_API) return mockKeywordsAdd(String(params.categoryId), params.keyword)
 
   const body = new URLSearchParams({
-    category: String(params.categoryId), // 注意：参数名必须叫 category
+    category: String(params.categoryId),
     keyword: params.keyword,
   })
 
@@ -87,8 +84,9 @@ export async function apiRemoveKeyword(params: { categoryId: number; keyword: st
 }
 
 /**
- * 修改关键词（若你后端也是 @RequestParam，推荐 urlencoded + POST）
- * POST /api/v1/keywords/update
+ * 修改关键词
+ * PATCH /api/v1/keywords/update
+ * Content-Type: application/x-www-form-urlencoded
  * body: category=1&oldKeyword=aaa&newKeyword=bbb
  */
 export async function apiUpdateKeyword(params: {
@@ -107,7 +105,7 @@ export async function apiUpdateKeyword(params: {
   })
 
   return request<null>('/keywords/update', {
-    method: 'POST',
+    method: 'PATCH',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body,
   })

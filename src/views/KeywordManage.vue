@@ -54,7 +54,7 @@
     </el-table>
 
     <div style="margin-top: 10px; color:#999; font-size:12px">
-      对齐后端：category 一律使用数字ID；新增/修改使用 urlencoded；删除使用 DELETE + querystring。
+      对齐后端：category 一律使用数字ID；新增使用 POST + urlencoded；修改使用 PATCH + urlencoded；删除使用 DELETE + querystring。
     </div>
 
     <el-dialog v-model="editVisible" title="修改关键词" width="520px">
