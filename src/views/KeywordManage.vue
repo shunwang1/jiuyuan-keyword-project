@@ -4,7 +4,6 @@
       <div style="font-weight:700">关键词管理</div>
     </template>
 
-    <!-- 联调模式：不做前端强拦截；若无管理员权限，由后端返回 403 -->
     <div style="padding: 8px 0">
       <el-alert title="提示" type="warning" :closable="false" show-icon>
         <template #default>
@@ -13,41 +12,39 @@
       </el-alert>
     </div>
 
-    <!-- ✅ 第一行：报告类别筛选（单独一行） -->
     <div style="margin-bottom: 12px">
       <el-form label-width="70px" style="max-width: 720px">
         <el-form-item label="报告类别">
           <el-select
-            v-model="category"
+            v-model="categoryId"
             placeholder="请选择类别"
-            style="width: 260px"
-            :loading="loading"
+            style="width: 320px"
+            :loading="loadingCategories"
             @change="loadKeywords"
           >
-            <el-option v-for="c in categories" :key="c" :label="c" :value="c" />
+            <el-option v-for="c in categories" :key="c.id" :label="c.category" :value="c.id" />
           </el-select>
         </el-form-item>
       </el-form>
     </div>
 
-    <!-- ✅ 第二行：关键词筛选 + 新增 -->
     <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-bottom: 12px">
       <el-input v-model="filterText" placeholder="筛选关键词..." style="width: 220px" clearable />
       <el-input v-model="newKeyword" placeholder="新增关键词（放到最上面）" style="width: 260px" clearable />
-      <el-button type="primary" :loading="adding" :disabled="!category" @click="addKeyword">新增</el-button>
+      <el-button type="primary" :loading="adding" :disabled="!categoryId" @click="addKeyword">新增</el-button>
     </div>
 
-    <el-table :data="filteredKeywords" style="width: 100%" v-loading="loading">
+    <el-table :data="filteredKeywords" style="width: 100%" v-loading="loadingKeywords">
       <el-table-column prop="keyword" label="关键词" />
       <el-table-column label="操作" width="160">
         <template #default="{ row }">
-          <el-button type="primary" link :disabled="!category" @click="openEdit(row)">修改</el-button>
+          <el-button type="primary" link :disabled="!categoryId" @click="openEdit(row)">修改</el-button>
 
           <el-button
             type="danger"
             link
             :loading="removingKey === row.keyword"
-            :disabled="!category"
+            :disabled="!categoryId"
             @click="removeKeyword(row)"
           >
             删除
@@ -57,10 +54,9 @@
     </el-table>
 
     <div style="margin-top: 10px; color:#999; font-size:12px">
-      注：该页面按“类别”维度维护关键词（接口请求体仅包含 category / keyword）。
+      对齐后端：category 一律使用数字ID；新增/修改使用 urlencoded；删除使用 DELETE + querystring。
     </div>
 
-    <!-- 修改关键词弹窗 -->
     <el-dialog v-model="editVisible" title="修改关键词" width="520px">
       <el-form label-width="110px">
         <el-form-item label="原关键词">
@@ -80,17 +76,19 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { request, type RequestError } from '../api/http'
 import { apiQueryKeywords, apiAddKeyword, apiRemoveKeyword, apiUpdateKeyword } from '../api/keywords'
-import type { RequestError } from '../api/http'
 
 type KeywordRow = { keyword: string }
+type CategoryRow = { id: number; category: string }
 
-const categories = ['DPA', '单项检测', '失效分析', '结构分析', '电性能测试', '其他检测'] as const
+const categories = ref<CategoryRow[]>([])
+const loadingCategories = ref(false)
 
-const loading = ref(false)
-const category = ref<string>('')
+const loadingKeywords = ref(false)
+const categoryId = ref<number | null>(null)
 
 const filterText = ref('')
 const newKeyword = ref('')
@@ -108,38 +106,52 @@ const filteredKeywords = computed(() => {
 
 function handleApiError(e: unknown, fallback: string) {
   const err = e as Partial<RequestError>
-  // 后端 ResponseCode.FORBIDDEN = 403；冻结=40302
   if (err?.code === 403 || err?.code === 40302) return ElMessage.error('无权限（需要管理员）')
   const msg = e instanceof Error ? e.message : fallback
   ElMessage.error(msg)
 }
 
-/** 选择类别后加载关键词 */
+async function loadCategories() {
+  loadingCategories.value = true
+  try {
+    const data = await request<any[]>('/categories/query', { method: 'GET' })
+    categories.value = (data || [])
+      .map((x) => ({ id: Number(x?.id), category: String(x?.category ?? '') }))
+      .filter((x) => Number.isFinite(x.id) && x.category)
+  } catch (e: unknown) {
+    handleApiError(e, '加载类别失败')
+  } finally {
+    loadingCategories.value = false
+  }
+}
+
+onMounted(loadCategories)
+
 const loadKeywords = async () => {
-  if (!category.value) {
+  if (!categoryId.value) {
     keywords.value = []
     return
   }
-  loading.value = true
+  loadingKeywords.value = true
   try {
-    const data = await apiQueryKeywords(category.value)
+    const data = await apiQueryKeywords(categoryId.value)
     keywords.value = (data.keywords || []).map((k) => ({ keyword: k }))
   } catch (e: unknown) {
     handleApiError(e, '加载关键词失败')
   } finally {
-    loading.value = false
+    loadingKeywords.value = false
   }
 }
 
 const addKeyword = async () => {
   const kw = newKeyword.value.trim()
-  if (!category.value) return ElMessage.warning('请先选择类别')
+  if (!categoryId.value) return ElMessage.warning('请先选择类别')
   if (!kw) return ElMessage.warning('请输入要新增的关键词')
   if (keywords.value.some((x) => x.keyword === kw)) return ElMessage.warning('关键词已存在')
 
   adding.value = true
   try {
-    await apiAddKeyword({ category: category.value, keyword: kw })
+    await apiAddKeyword({ categoryId: categoryId.value, keyword: kw })
     keywords.value.unshift({ keyword: kw })
     newKeyword.value = ''
     ElMessage.success('新增成功')
@@ -151,13 +163,13 @@ const addKeyword = async () => {
 }
 
 const removeKeyword = async (row: KeywordRow) => {
-  if (!category.value) return ElMessage.warning('请先选择类别')
+  if (!categoryId.value) return ElMessage.warning('请先选择类别')
 
   await ElMessageBox.confirm(`确定删除关键词「${row.keyword}」吗？`, '提示', { type: 'warning' })
 
   removingKey.value = row.keyword
   try {
-    await apiRemoveKeyword({ category: category.value, keyword: row.keyword })
+    await apiRemoveKeyword({ categoryId: categoryId.value, keyword: row.keyword })
     keywords.value = keywords.value.filter((x) => x.keyword !== row.keyword)
     ElMessage.success('删除成功')
   } catch (e: unknown) {
@@ -167,7 +179,6 @@ const removeKeyword = async (row: KeywordRow) => {
   }
 }
 
-/* 修改关键词 */
 const editVisible = ref(false)
 const editing = ref(false)
 const editForm = reactive<{ oldKeyword: string; newKeyword: string }>({
@@ -182,7 +193,7 @@ const openEdit = (row: KeywordRow) => {
 }
 
 const submitEdit = async () => {
-  if (!category.value) return ElMessage.warning('请先选择类别')
+  if (!categoryId.value) return ElMessage.warning('请先选择类别')
 
   const oldKw = editForm.oldKeyword.trim()
   const newKw = editForm.newKeyword.trim()
@@ -193,7 +204,7 @@ const submitEdit = async () => {
 
   editing.value = true
   try {
-    await apiUpdateKeyword({ category: category.value, oldKeyword: oldKw, newKeyword: newKw })
+    await apiUpdateKeyword({ categoryId: categoryId.value, oldKeyword: oldKw, newKeyword: newKw })
     keywords.value = keywords.value.map((x) => (x.keyword === oldKw ? { keyword: newKw } : x))
     ElMessage.success('修改成功')
     editVisible.value = false

@@ -1,5 +1,5 @@
 // src/api/keywords.ts
-// 关键词管理API接口
+// 关键词接口全部使用 urlencoded 或 querystring（对齐 Spring @RequestParam）
 
 import { request } from './http'
 import { USE_MOCK_API } from '../config/dev'
@@ -9,66 +9,78 @@ export interface KeywordsQueryResponseData {
   keywords: string[]
 }
 
-export interface KeywordMutationParams {
-  category: string
-  keyword: string
-}
-
 /**
  * 查询关键词
- * 新接口：GET /api/v1/keywords/query?category=1
- * 注意：这里 category 改为 number（类别ID）
+ * GET /api/v1/keywords/query?category=1
  */
-export async function apiQueryKeywords(category: number): Promise<KeywordsQueryResponseData> {
-  if (USE_MOCK_API) {
-    // mock 里如果还是按字符串类别存，你可以先 String(category) 兼容
-    return mockKeywordsQuery(String(category))
-  }
+export async function apiQueryKeywords(categoryId: number): Promise<KeywordsQueryResponseData> {
+  if (USE_MOCK_API) return mockKeywordsQuery(String(categoryId))
 
-  return request<KeywordsQueryResponseData>(`/keywords/query?category=${encodeURIComponent(category)}`, {
-    method: 'GET',
-  })
+  return request<KeywordsQueryResponseData>(
+    `/keywords/query?category=${encodeURIComponent(categoryId)}`,
+    { method: 'GET' },
+  )
 }
 
 /**
- * 新增关键词（你未要求调整，此处保持原样；若后端也改了再一起改）
+ * 新增关键词
+ * POST /api/v1/keywords/add
+ * Content-Type: application/x-www-form-urlencoded
+ * body: category=1&keyword=xxx
  */
-export async function apiAddKeyword({ category, keyword }: KeywordMutationParams): Promise<null> {
-  if (USE_MOCK_API) {
-    return mockKeywordsAdd(category, keyword)
-  }
+export async function apiAddKeyword(params: { categoryId: number; keyword: string }): Promise<null> {
+  if (USE_MOCK_API) return mockKeywordsAdd(String(params.categoryId), params.keyword)
+
+  const body = new URLSearchParams({
+    category: String(params.categoryId), // 注意：参数名必须叫 category
+    keyword: params.keyword,
+  })
+
   return request<null>('/keywords/add', {
     method: 'POST',
-    body: { category, keyword },
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body,
   })
 }
 
 /**
- * 删除关键词（保持原样）
+ * 删除关键词
+ * DELETE /api/v1/keywords/delete?category=1&keyword=xxx
  */
-export async function apiRemoveKeyword({ category, keyword }: KeywordMutationParams): Promise<null> {
-  if (USE_MOCK_API) {
-    return mockKeywordsRemove(category, keyword)
-  }
-  return request<null>('/keywords/remove', {
-    method: 'POST',
-    body: { category, keyword },
-  })
+export async function apiRemoveKeyword(params: { categoryId: number; keyword: string }): Promise<null> {
+  if (USE_MOCK_API) return mockKeywordsRemove(String(params.categoryId), params.keyword)
+
+  const qs = new URLSearchParams({
+    category: String(params.categoryId),
+    keyword: params.keyword,
+  }).toString()
+
+  return request<null>(`/keywords/delete?${qs}`, { method: 'DELETE' })
 }
 
-export interface UpdateKeywordParams {
-  category: string
+/**
+ * 修改关键词（若你后端也是 @RequestParam，推荐 urlencoded + POST）
+ * POST /api/v1/keywords/update
+ * body: category=1&oldKeyword=aaa&newKeyword=bbb
+ */
+export async function apiUpdateKeyword(params: {
+  categoryId: number
   oldKeyword: string
   newKeyword: string
-}
-
-/** 修改关键词（保持原样） */
-export async function apiUpdateKeyword(params: UpdateKeywordParams): Promise<null> {
+}): Promise<null> {
   if (USE_MOCK_API) {
-    return mockKeywordsUpdate(params.category, params.oldKeyword, params.newKeyword)
+    return mockKeywordsUpdate(String(params.categoryId), params.oldKeyword, params.newKeyword)
   }
+
+  const body = new URLSearchParams({
+    category: String(params.categoryId),
+    oldKeyword: params.oldKeyword,
+    newKeyword: params.newKeyword,
+  })
+
   return request<null>('/keywords/update', {
     method: 'POST',
-    body: params,
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body,
   })
 }
