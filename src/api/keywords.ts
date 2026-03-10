@@ -1,9 +1,9 @@
+// src/api/keywords.ts
 // 关键词管理API接口
 
 import { request } from './http'
 import { USE_MOCK_API } from '../config/dev'
 import { mockKeywordsQuery, mockKeywordsAdd, mockKeywordsRemove, mockKeywordsUpdate } from './mock'
-
 
 export interface KeywordsQueryResponseData {
   keywords: string[]
@@ -16,21 +16,22 @@ export interface KeywordMutationParams {
 
 /**
  * 查询关键词
- * @param category 报告类别
- * @returns { keywords: [...] }
+ * 新接口：GET /api/v1/keywords/query?category=1
+ * 注意：这里 category 改为 number（类别ID）
  */
-export async function apiQueryKeywords(category: string): Promise<KeywordsQueryResponseData> {
+export async function apiQueryKeywords(category: number): Promise<KeywordsQueryResponseData> {
   if (USE_MOCK_API) {
-    return mockKeywordsQuery(category)
+    // mock 里如果还是按字符串类别存，你可以先 String(category) 兼容
+    return mockKeywordsQuery(String(category))
   }
-  return request<KeywordsQueryResponseData>('/keywords/query', {
-    method: 'POST',
-    body: { category },
+
+  return request<KeywordsQueryResponseData>(`/keywords/query?category=${encodeURIComponent(category)}`, {
+    method: 'GET',
   })
 }
 
 /**
- * 新增关键词
+ * 新增关键词（你未要求调整，此处保持原样；若后端也改了再一起改）
  */
 export async function apiAddKeyword({ category, keyword }: KeywordMutationParams): Promise<null> {
   if (USE_MOCK_API) {
@@ -43,7 +44,7 @@ export async function apiAddKeyword({ category, keyword }: KeywordMutationParams
 }
 
 /**
- * 删除关键词
+ * 删除关键词（保持原样）
  */
 export async function apiRemoveKeyword({ category, keyword }: KeywordMutationParams): Promise<null> {
   if (USE_MOCK_API) {
@@ -61,7 +62,7 @@ export interface UpdateKeywordParams {
   newKeyword: string
 }
 
-/** 新增：修改关键词 */
+/** 修改关键词（保持原样） */
 export async function apiUpdateKeyword(params: UpdateKeywordParams): Promise<null> {
   if (USE_MOCK_API) {
     return mockKeywordsUpdate(params.category, params.oldKeyword, params.newKeyword)
@@ -71,4 +72,3 @@ export async function apiUpdateKeyword(params: UpdateKeywordParams): Promise<nul
     body: params,
   })
 }
-

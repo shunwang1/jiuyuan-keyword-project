@@ -5,7 +5,6 @@
     </template>
 
     <el-form label-width="110px" style="max-width: 980px">
-      <!-- 关键词（放在检索条件上面） -->
       <el-form-item label="关键词">
         <el-select
           v-model="query.keywords"
@@ -26,19 +25,12 @@
         </div>
       </el-form-item>
 
-      <!-- 类别 -->
       <el-form-item label="报告类别" required>
-        <el-select
-          v-model="query.category"
-          placeholder="请选择类别"
-          style="width: 260px"
-          @change="onCategoryChange"
-        >
+        <el-select v-model="query.category" placeholder="请选择类别" style="width: 260px" @change="onCategoryChange">
           <el-option v-for="c in categories" :key="c.value" :label="c.label" :value="c.value" />
         </el-select>
       </el-form-item>
 
-      <!-- 新检索条件：型号规格、元器件门类、厂家信息、批号 -->
       <el-form-item label="型号规格">
         <el-input v-model="query.modelSpec" placeholder="请输入型号规格" clearable />
       </el-form-item>
@@ -55,7 +47,6 @@
         <el-input v-model="query.batchNo" placeholder="请输入批号" clearable />
       </el-form-item>
 
-      <!-- 操作按钮 -->
       <el-form-item>
         <el-button type="primary" :loading="loadingSearch" @click="doSearch(true)">检索</el-button>
         <el-button :disabled="loadingSearch" @click="resetForm">重置</el-button>
@@ -83,10 +74,8 @@
       @selection-change="onSelectionChange"
     >
       <el-table-column type="selection" width="48" />
-
       <el-table-column prop="fileName" label="报告名称" min-width="240" />
 
-      <!-- 类别：映射显示 -->
       <el-table-column label="类别" width="140">
         <template #default="{ row }">
           {{ categoryLabel(row.category) }}
@@ -98,18 +87,23 @@
       <el-table-column prop="vendor" label="厂家信息" min-width="160" />
       <el-table-column prop="batchNo" label="批号" min-width="140" />
 
-      <!-- 状态：1001/1002/1003 映射展示（新增列，不改变现有功能） -->
       <el-table-column label="状态" width="120">
         <template #default="{ row }">
           {{ statusLabel(row.status) }}
         </template>
       </el-table-column>
 
-      <el-table-column label="操作" width="200">
+      <el-table-column label="操作" width="240">
         <template #default="{ row }">
-          <el-button type="primary" link @click="previewReport(row)">预览</el-button>
-          <el-button type="primary" link @click="openReport(row)">打开</el-button>
-          <el-button type="primary" link @click="downloadReport(row)">下载</el-button>
+          <el-button type="primary" link :loading="previewLoadingId === row.reportId" @click="previewReport(row)">
+            预览
+          </el-button>
+          <el-button type="primary" link :loading="openLoadingId === row.reportId" @click="openReport(row)">
+            打开
+          </el-button>
+          <el-button type="primary" link :loading="downloadLoadingId === row.reportId" @click="downloadReport(row)">
+            下载
+          </el-button>
         </template>
       </el-table-column>
     </el-table>
@@ -125,7 +119,14 @@
     </div>
 
     <!-- 单份预览对话框 -->
-    <el-dialog v-model="previewVisible" title="报告预览" width="80%" top="5vh" :destroy-on-close="true">
+    <el-dialog
+      v-model="previewVisible"
+      title="报告预览"
+      width="80%"
+      top="5vh"
+      :destroy-on-close="true"
+      @closed="cleanupPreviewUrl"
+    >
       <div style="height: 75vh">
         <iframe v-if="previewUrl" :src="previewUrl" style="width: 100%; height: 100%; border: 0" />
         <div v-else style="color:#999">暂无可预览内容</div>
@@ -133,16 +134,24 @@
 
       <template #footer>
         <el-button @click="previewVisible = false">关闭</el-button>
-        <el-button type="primary" @click="openPreviewInNewTab">新窗口打开</el-button>
+        <el-button type="primary" :disabled="!previewUrl" @click="openPreviewInNewTab">新窗口打开</el-button>
       </template>
     </el-dialog>
 
     <!-- 对比预览弹窗（2-3 份并排） -->
-    <el-dialog v-model="compareVisible" title="报告对比预览" width="92%" top="4vh" :destroy-on-close="true">
-      <div class="compare" :style="{ gridTemplateColumns: `repeat(${compareRows.length || 1}, 1fr)` }">
-        <div v-for="r in compareRows" :key="r.reportId" class="compare__col">
-          <div class="compare__title" :title="r.fileName">{{ r.fileName }}</div>
-          <iframe :src="reportFileUrl(r)" class="compare__iframe" />
+    <el-dialog
+      v-model="compareVisible"
+      title="报告对比预览"
+      width="92%"
+      top="4vh"
+      :destroy-on-close="true"
+      @closed="cleanupCompareUrls"
+    >
+      <div class="compare" :style="{ gridTemplateColumns: `repeat(${compareItems.length || 1}, 1fr)` }">
+        <div v-for="it in compareItems" :key="it.reportId" class="compare__col">
+          <div class="compare__title" :title="it.fileName">{{ it.fileName }}</div>
+          <div v-if="it.loading" style="padding: 10px; color:#999">加载中...</div>
+          <iframe v-else :src="it.url" class="compare__iframe" />
         </div>
       </div>
 
@@ -157,17 +166,8 @@
 import { reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { apiQueryKeywords } from '../api/keywords'
-import { apiSearchReports, type ReportListItem, type SearchReportsResponseData } from '../api/reports'
+import { apiSearchReports, apiReportFileBlob, type ReportListItem, type SearchReportsResponseData } from '../api/reports'
 
-/**
- * 类别：后端字典 1-6
- * 1 DPA
- * 2 测试报告
- * 3 FA 报告
- * 4 CA 报告
- * 5 二次测试报告
- * 6 定制报告
- */
 const categories = [
   { label: 'DPA 报告', value: 1 },
   { label: '测试报告', value: 2 },
@@ -185,9 +185,6 @@ const categoryLabel = (v: unknown) => {
   return hit?.label ?? (v == null ? '' : String(v))
 }
 
-/**
- * 状态：后端字典 1001/1002/1003
- */
 const statusLabel = (v: unknown) => {
   const n = typeof v === 'number' ? v : Number(v)
   if (n === 1001) return '待处理'
@@ -221,12 +218,19 @@ const result = ref<ReportListItem[]>([])
 const loadingKeywords = ref(false)
 const loadingSearch = ref(false)
 
+const selectedRows = ref<ReportListItem[]>([])
+
 const previewVisible = ref(false)
 const previewUrl = ref('')
+const previewLoadingId = ref<number | null>(null)
+let previewUrlToRevoke: string | null = null
 
-const selectedRows = ref<ReportListItem[]>([])
+const openLoadingId = ref<number | null>(null)
+const downloadLoadingId = ref<number | null>(null)
+
 const compareVisible = ref(false)
-const compareRows = ref<ReportListItem[]>([])
+const compareItems = ref<Array<{ reportId: number; fileName: string; url: string; loading: boolean }>>([])
+const compareUrlsToRevoke = ref<string[]>([])
 
 const onCategoryChange = () => {
   query.keywords = []
@@ -240,9 +244,7 @@ const onKeywordsVisibleChange = async (visible: boolean) => {
 
   loadingKeywords.value = true
   try {
-    // 说明：你要求“不改原 API”，因此这里用 any 兜一下类型差异；
-    // 后端补接口时可让 keywords/query 支持 number category，届时去掉 any。
-    const data = await apiQueryKeywords(query.category as any)
+    const data = await apiQueryKeywords(query.category)
     keywordOptions.value = data.keywords || []
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : '加载关键词失败'
@@ -300,13 +302,39 @@ const resetForm = () => {
   selectedRows.value = []
 }
 
-const reportFileUrl = (row: ReportListItem) => {
-  return `/api/v1/reports/file?reportId=${encodeURIComponent(row.reportId)}&t=${Date.now()}`
+const onSelectionChange = (rows: ReportListItem[]) => {
+  selectedRows.value = rows
 }
 
-const previewReport = (row: ReportListItem) => {
-  previewUrl.value = reportFileUrl(row)
-  previewVisible.value = true
+// ===== Blob 预览/下载（带 token header）=====
+function cleanupPreviewUrl() {
+  if (previewUrlToRevoke) {
+    URL.revokeObjectURL(previewUrlToRevoke)
+    previewUrlToRevoke = null
+  }
+  previewUrl.value = ''
+}
+
+async function getBlobUrlById(id: number) {
+  const blob = await apiReportFileBlob(id)
+  const url = URL.createObjectURL(blob)
+  return url
+}
+
+const previewReport = async (row: ReportListItem) => {
+  cleanupPreviewUrl()
+  previewLoadingId.value = row.reportId
+  try {
+    const url = await getBlobUrlById(row.reportId)
+    previewUrl.value = url
+    previewUrlToRevoke = url
+    previewVisible.value = true
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : '预览失败'
+    ElMessage.error(msg)
+  } finally {
+    previewLoadingId.value = null
+  }
 }
 
 const openPreviewInNewTab = () => {
@@ -314,29 +342,79 @@ const openPreviewInNewTab = () => {
   window.open(previewUrl.value, '_blank')
 }
 
-const openReport = (row: ReportListItem) => {
-  window.open(`/api/v1/reports/file?reportId=${encodeURIComponent(row.reportId)}`, '_blank')
+const openReport = async (row: ReportListItem) => {
+  // “打开”也走 blob（避免新窗口请求不带 token header）
+  openLoadingId.value = row.reportId
+  try {
+    const url = await getBlobUrlById(row.reportId)
+    // 新开窗口后仍需 revoke；这里做一个延迟回收，避免瞬间回收导致新窗加载失败
+    window.open(url, '_blank')
+    window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : '打开失败'
+    ElMessage.error(msg)
+  } finally {
+    openLoadingId.value = null
+  }
 }
 
-const downloadReport = (row: ReportListItem) => {
-  const a = document.createElement('a')
-  a.href = `/api/v1/reports/file?reportId=${encodeURIComponent(row.reportId)}&disposition=attachment`
-  a.download = row.fileName || 'report'
-  document.body.appendChild(a)
-  a.click()
-  a.remove()
+const downloadReport = async (row: ReportListItem) => {
+  downloadLoadingId.value = row.reportId
+  try {
+    const url = await getBlobUrlById(row.reportId)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = row.fileName || 'report'
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    // 下载触发后即可回收
+    URL.revokeObjectURL(url)
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : '下载失败'
+    ElMessage.error(msg)
+  } finally {
+    downloadLoadingId.value = null
+  }
 }
 
-const onSelectionChange = (rows: ReportListItem[]) => {
-  selectedRows.value = rows
+// ===== 对比（2-3份 blob 并排）=====
+function cleanupCompareUrls() {
+  for (const u of compareUrlsToRevoke.value) URL.revokeObjectURL(u)
+  compareUrlsToRevoke.value = []
+  compareItems.value = []
 }
 
-const openCompare = () => {
+const openCompare = async () => {
   if (selectedRows.value.length < 2 || selectedRows.value.length > 3) {
     return ElMessage.warning('请选择 2 或 3 份报告进行对比')
   }
-  compareRows.value = selectedRows.value.slice(0, 3)
+
+  cleanupCompareUrls()
   compareVisible.value = true
+
+  // 先填充占位（loading=true）
+  compareItems.value = selectedRows.value.slice(0, 3).map((r) => ({
+    reportId: r.reportId,
+    fileName: r.fileName,
+    url: '',
+    loading: true,
+  }))
+
+  // 并行拉取
+  await Promise.all(
+    compareItems.value.map(async (it) => {
+      try {
+        const url = await getBlobUrlById(it.reportId)
+        it.url = url
+        it.loading = false
+        compareUrlsToRevoke.value.push(url)
+      } catch (e) {
+        it.url = ''
+        it.loading = false
+      }
+    }),
+  )
 }
 </script>
 
