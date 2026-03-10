@@ -133,19 +133,19 @@
 
       <el-table-column label="元器件门类" min-width="150">
         <template #default="{ row }">
-          {{ row.deviceCategory || row.componentCategory || '' }}
+          {{ row.deviceCategory || '' }}
         </template>
       </el-table-column>
 
       <el-table-column label="厂家信息" min-width="160">
         <template #default="{ row }">
-          {{ row.vendor || row.manufacturerName || row.manufacture || '' }}
+          {{ row.vendor || '' }}
         </template>
       </el-table-column>
 
       <el-table-column label="批号" min-width="140">
         <template #default="{ row }">
-          {{ row.batchNo || row.batchNumber || '' }}
+          {{ row.batchNo || '' }}
         </template>
       </el-table-column>
 
@@ -249,6 +249,7 @@ import {
 } from '../api/reports'
 
 type CategoryRow = { id: number; category: string }
+
 type ReportRow = ReportListItem & {
   componentCategory?: string
   manufacturerName?: string
@@ -271,6 +272,27 @@ const statusLabel = (v: unknown) => {
   if (n === 1002) return '已通过'
   if (n === 1003) return '已拒绝'
   return v == null ? '' : String(v)
+}
+
+function normalizeRow(raw: any): ReportRow {
+  return {
+    reportId: Number(raw?.reportId ?? raw?.id ?? raw?.reportID ?? raw?.report_id),
+    fileName: String(raw?.fileName ?? raw?.filename ?? raw?.name ?? ''),
+    category: raw?.category ?? raw?.categoryId ?? '',
+    modelSpec: raw?.modelSpec ?? '',
+    deviceCategory: raw?.deviceCategory ?? raw?.componentCategory ?? '',
+    vendor: raw?.vendor ?? raw?.manufacturerName ?? raw?.manufacture ?? '',
+    batchNo: raw?.batchNo ?? raw?.batchNumber ?? '',
+    prodDate: raw?.prodDate,
+    address: raw?.address,
+    status: raw?.status,
+    createdAt: raw?.createdAt,
+
+    componentCategory: raw?.componentCategory,
+    manufacturerName: raw?.manufacturerName,
+    manufacture: raw?.manufacture,
+    batchNumber: raw?.batchNumber,
+  }
 }
 
 const query = reactive<{
@@ -405,7 +427,7 @@ const doSearch = async (resetToFirstPage = false) => {
       page: { ...page },
     })
 
-    result.value = (data.list || []) as ReportRow[]
+    result.value = (data.list || []).map(normalizeRow)
     total.value = data.total || 0
     ElMessage.success('检索完成')
   } catch (e: unknown) {
