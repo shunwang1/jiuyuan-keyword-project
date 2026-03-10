@@ -28,6 +28,12 @@ export interface RequestError extends Error {
   status?: number
 }
 
+export interface BlobResponse {
+  blob: Blob
+  headers: Headers
+  status: number
+}
+
 function readToken(): string | null {
   try {
     return localStorage.getItem(JWT_TOKEN_LS_KEY)
@@ -61,6 +67,10 @@ function redirectToLogin(reason?: string) {
  * 统一的HTTP请求函数（RPC统一返回：{code,msg,data,traceId}）
  * JWT鉴权：请求头 token: <JWT>
  * 成功码：ResponseCode.SUCCESS = 1
+ *
+ * 特别说明：
+ * - responseType === 'blob' 时，返回 { blob, headers, status }
+ * - 这样调用方可从 headers 里读取 Content-Disposition 解析文件名
  */
 export async function request<T = unknown>(path: string, options: RequestOptions = {}): Promise<T> {
   const url = path.startsWith('http') ? path : `${BASE_URL}${path}`
@@ -95,19 +105,56 @@ export async function request<T = unknown>(path: string, options: RequestOptions
           ? (options.body as FormData)
           : isUrlSearchParams
             ? (options.body as URLSearchParams).toString()
-          : typeof options.body === 'string'
-            ? options.body
-            : JSON.stringify(options.body),
+            : typeof options.body === 'string'
+              ? options.body
+              : JSON.stringify(options.body),
   })
 
   // blob：下载/预览文件
   if (options.responseType === 'blob') {
     if (!resp.ok) {
-      const err: RequestError = new Error(`HTTP ${resp.status}`)
+      let payload: unknown = null
+      try {
+        const ct = resp.headers.get('content-type') || ''
+        if (ct.includes('application/json')) payload = await resp.json()
+        else payload = await resp.text()
+      } catch {
+        // ignore
+      }
+
+      if (payload && typeof payload === 'object' && 'code' in payload) {
+        const p = payload as RpcEnvelope<unknown>
+
+        if (p.code === 401 || p.code === 40102) {
+          clearAuthStorage()
+          redirectToLogin(p.msg || '登录已失效，请重新登录')
+        }
+        if (p.code === 40302) {
+          clearAuthStorage()
+          redirectToLogin(p.msg || '账号已冻结，请联系管理员')
+        }
+
+        const err: RequestError = new Error(p.msg || `HTTP ${resp.status}`)
+        err.code = p.code
+        err.traceId = p.traceId
+        err.data = p.data
+        err.status = resp.status
+        throw err
+      }
+
+      const err: RequestError = new Error(
+        typeof payload === 'string' && payload ? payload : `HTTP ${resp.status}`,
+      )
       err.status = resp.status
       throw err
     }
-    return (await resp.blob()) as unknown as T
+
+    const blob = await resp.blob()
+    return {
+      blob,
+      headers: resp.headers,
+      status: resp.status,
+    } as T
   }
 
   // 非2xx：尽量解析统一结构

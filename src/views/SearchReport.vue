@@ -234,7 +234,11 @@ import {
 
 type CategoryRow = { id: number; category: string }
 
-// 动态类别
+type FileBlobResult = {
+  blob: Blob
+  fileName: string
+}
+
 const categories = ref<CategoryRow[]>([])
 const loadingCategories = ref(false)
 
@@ -376,7 +380,6 @@ const doSearch = async (resetToFirstPage = false) => {
       filters: {
         category: query.categoryId,
         modelSpec: query.modelSpec || undefined,
-        // 仍沿用你原搜索 API 的字段名映射：deviceCategory/vendor/batchNo
         deviceCategory: query.componentCategory || undefined,
         vendor: query.manufacturerName || undefined,
         batchNo: query.batchNumber || undefined,
@@ -427,6 +430,63 @@ const onSelectionChange = (rows: ReportListItem[]) => {
   selectedRows.value = rows
 }
 
+function decodeFileNameSafely(value: string): string {
+  const s = String(value || '').trim()
+  if (!s) return ''
+
+  try {
+    return decodeURIComponent(s)
+  } catch {
+    return s
+  }
+}
+
+function stripQuotes(value: string): string {
+  return String(value || '').trim().replace(/^"(.*)"$/, '$1')
+}
+
+function sanitizeDownloadFileName(value: string, fallbackName: string): string {
+  const fallback = String(fallbackName || '').trim() || 'download'
+  const name = String(value || '').trim()
+  if (!name) return fallback
+
+  const cleaned = name.replace(/[\\/:*?"<>|]/g, '_').trim()
+  return cleaned || fallback
+}
+
+/**
+ * 从 Content-Disposition 中提取文件名
+ * 优先级：
+ * 1. filename*=UTF-8''xxx
+ * 2. filename=xxx
+ * 3. fallbackName
+ */
+function extractFileNameFromContentDisposition(
+  disposition: string | null,
+  fallbackName: string,
+): string {
+  const fallback = String(fallbackName || '').trim() || 'download'
+  if (!disposition) return fallback
+
+  const utf8Match = disposition.match(/filename\*\s*=\s*UTF-8''([^;]+)/i)
+  if (utf8Match?.[1]) {
+    const decoded = decodeFileNameSafely(stripQuotes(utf8Match[1]))
+    return sanitizeDownloadFileName(decoded, fallback)
+  }
+
+  const quotedMatch = disposition.match(/filename\s*=\s*"([^"]+)"/i)
+  if (quotedMatch?.[1]) {
+    return sanitizeDownloadFileName(quotedMatch[1], fallback)
+  }
+
+  const plainMatch = disposition.match(/filename\s*=\s*([^;]+)/i)
+  if (plainMatch?.[1]) {
+    return sanitizeDownloadFileName(stripQuotes(plainMatch[1]), fallback)
+  }
+
+  return fallback
+}
+
 // ===== blob 预览/下载 =====
 const previewVisible = ref(false)
 const previewUrl = ref('')
@@ -444,8 +504,26 @@ function cleanupPreviewUrl() {
   previewUrl.value = ''
 }
 
-async function getBlobUrlById(id: number) {
-  const blob = await apiReportFileBlob(id)
+async function getFileBlobResult(row: ReportListItem): Promise<FileBlobResult> {
+  const res = await apiReportFileBlob(row.reportId)
+  const disposition =
+    res.headers.get('content-disposition') ||
+    res.headers.get('Content-Disposition') ||
+    ''
+
+  const fileName = extractFileNameFromContentDisposition(
+    disposition,
+    row.fileName || 'report',
+  )
+
+  return {
+    blob: res.blob,
+    fileName,
+  }
+}
+
+async function getBlobUrlByRow(row: ReportListItem) {
+  const { blob } = await getFileBlobResult(row)
   return URL.createObjectURL(blob)
 }
 
@@ -453,7 +531,7 @@ const previewReport = async (row: ReportListItem) => {
   cleanupPreviewUrl()
   previewLoadingId.value = row.reportId
   try {
-    const url = await getBlobUrlById(row.reportId)
+    const url = await getBlobUrlByRow(row)
     previewUrl.value = url
     previewUrlToRevoke = url
     previewVisible.value = true
@@ -472,7 +550,7 @@ const openPreviewInNewTab = () => {
 const openReport = async (row: ReportListItem) => {
   openLoadingId.value = row.reportId
   try {
-    const url = await getBlobUrlById(row.reportId)
+    const url = await getBlobUrlByRow(row)
     window.open(url, '_blank')
     window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
   } catch (e: unknown) {
@@ -485,13 +563,16 @@ const openReport = async (row: ReportListItem) => {
 const downloadReport = async (row: ReportListItem) => {
   downloadLoadingId.value = row.reportId
   try {
-    const url = await getBlobUrlById(row.reportId)
+    const { blob, fileName } = await getFileBlobResult(row)
+    const url = URL.createObjectURL(blob)
+
     const a = document.createElement('a')
     a.href = url
-    a.download = row.fileName || 'report'
+    a.download = fileName || row.fileName || 'report'
     document.body.appendChild(a)
     a.click()
     a.remove()
+
     URL.revokeObjectURL(url)
   } catch (e: unknown) {
     ElMessage.error(e instanceof Error ? e.message : '下载失败')
@@ -529,7 +610,10 @@ const openCompare = async () => {
   await Promise.all(
     compareItems.value.map(async (it) => {
       try {
-        const url = await getBlobUrlById(it.reportId)
+        const row = selectedRows.value.find((x) => x.reportId === it.reportId)
+        if (!row) throw new Error('报告不存在')
+
+        const url = await getBlobUrlByRow(row)
         it.url = url
         it.loading = false
         compareUrlsToRevoke.value.push(url)

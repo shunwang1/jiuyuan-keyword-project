@@ -2,7 +2,7 @@
 // 报告管理相关API接口（按最新后端文档对齐：upload字段、file下载参数）
 // + 上传页下拉（query/add/delete）
 
-import { request } from './http'
+import { request, type BlobResponse } from './http'
 import { USE_MOCK_API } from '../config/dev'
 import { mockReportsSearch } from './mock'
 
@@ -111,11 +111,11 @@ export function apiUploadReport(params: UploadReportParams) {
 }
 
 /**
- * 下载报告文件（blob）
+ * 下载报告文件（blob + headers）
  * 新接口：GET /api/v1/reports/file?id=1
  */
 export function apiReportFileBlob(id: number | string) {
-  return request<Blob>(`/reports/file?id=${encodeURIComponent(id)}`, {
+  return request<BlobResponse>(`/reports/file?id=${encodeURIComponent(id)}`, {
     method: 'GET',
     responseType: 'blob',
   })
