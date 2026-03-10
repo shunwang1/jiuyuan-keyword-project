@@ -18,11 +18,11 @@ export type ReportCategory = number | string
 
 export interface UploadReportParams {
   file: File
-  category: number // 必填
-  modelSpec: string // 必填
-  componentCategory: string // 必填
-  manufacturerName?: string // 可选
-  batchNumber?: string // 可选
+  category: number
+  modelSpec: string
+  componentCategory: string
+  manufacturerName?: string
+  batchNumber?: string
 }
 
 export interface ApproveReportParams {
@@ -94,10 +94,6 @@ export interface ReportDetailResponseData {
   }
 }
 
-/**
- * 上传报告（multipart/form-data，字段按后端要求）
- * 成功返回 data: null
- */
 export function apiUploadReport(params: UploadReportParams) {
   const fd = new FormData()
   fd.append('file', params.file)
@@ -113,10 +109,6 @@ export function apiUploadReport(params: UploadReportParams) {
   })
 }
 
-/**
- * 下载报告文件（blob + headers）
- * GET /api/v1/reports/file?id=1
- */
 export function apiReportFileBlob(id: number | string) {
   return request<BlobResponse>(`/reports/file?id=${encodeURIComponent(id)}`, {
     method: 'GET',
@@ -126,25 +118,18 @@ export function apiReportFileBlob(id: number | string) {
 
 /**
  * 搜索报告
- *
- * 当前按更贴近上传页字段的方式传参：
- * - category
- * - keyword(可重复)
- * - modelSpec
- * - componentCategory
- * - manufacturerName
- * - batchNumber
- * - pageNo
- * - pageSize
+ * 兼容当前联调：
+ * - category 可传数字ID，也可传类别名
+ * - 结果兼容 list/records/rows
  */
-export async function apiSearchReports({ filters, page }: SearchReportsParams) {
+export async function apiSearchReports({ filters, page }: SearchReportsParams): Promise<SearchReportsResponseData> {
   if (USE_MOCK_API) {
     return mockReportsSearch({ filters, page }) as SearchReportsResponseData
   }
 
   const params = new URLSearchParams()
 
-  // 类别
+  // 类别：允许传 number 或 string
   params.set('category', String(filters.category))
 
   // 关键词：重复 keyword 参数
@@ -153,34 +138,45 @@ export async function apiSearchReports({ filters, page }: SearchReportsParams) {
     if (s) params.append('keyword', s)
   }
 
-  // 型号规格
   const modelSpec = (filters.modelSpec ?? '').toString().trim()
   if (modelSpec) params.set('modelSpec', modelSpec)
 
-  // 元器件门类
   const componentCategory = (filters.deviceCategory ?? '').toString().trim()
   if (componentCategory) params.set('componentCategory', componentCategory)
 
-  // 厂家
   const manufacturerName = (filters.vendor ?? '').toString().trim()
   if (manufacturerName) params.set('manufacturerName', manufacturerName)
 
-  // 批号
   const batchNumber = (filters.batchNo ?? '').toString().trim()
   if (batchNumber) params.set('batchNumber', batchNumber)
 
-  // 分页
   const p = Number(page.pageNo)
   if (Number.isFinite(p) && p > 0) params.set('pageNo', String(Math.floor(p)))
 
   const ps = Number(page.pageSize)
   if (Number.isFinite(ps) && ps > 0) params.set('pageSize', String(Math.min(15, Math.floor(ps))))
 
-  return request<SearchReportsResponseData>('/reports/search', {
+  const raw = await request<any>('/reports/search', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: params,
   })
+
+  const list = Array.isArray(raw?.list)
+    ? raw.list
+    : Array.isArray(raw?.records)
+      ? raw.records
+      : Array.isArray(raw?.rows)
+        ? raw.rows
+        : []
+
+  const totalRaw = raw?.total ?? raw?.count ?? raw?.pageTotal ?? list.length
+  const total = Number.isFinite(Number(totalRaw)) ? Number(totalRaw) : list.length
+
+  return {
+    list,
+    total,
+  }
 }
 
 /* ===========================
@@ -192,12 +188,6 @@ export interface CategoryItem {
   name: string
 }
 
-/**
- * 查询类别
- * 兼容后端不同字段：
- * - id/categoryId/value
- * - name/categoryName/category/label
- */
 export async function apiQueryCategories(): Promise<CategoryItem[]> {
   const data = await request<any>('/categories/query', { method: 'GET' })
   const list: any[] = Array.isArray(data) ? data : Array.isArray(data?.list) ? data.list : []
@@ -251,8 +241,6 @@ export async function apiQueryBatchNumbers(categoryId: number): Promise<string[]
 
 /* ===========================
  * 上传页下拉：新增/删除接口
- * 新增：POST x-www-form-urlencoded
- * 删除：DELETE query string
  * =========================== */
 
 export function apiAddModelSpec(params: { categoryId: number; modelSpec: string }) {

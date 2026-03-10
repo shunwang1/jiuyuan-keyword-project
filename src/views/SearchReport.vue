@@ -149,13 +149,23 @@
 
       <el-table-column label="操作" width="240">
         <template #default="{ row }">
-          <el-button type="primary" link :loading="previewLoadingId === row.reportId" @click="previewReport(row)">
+          <el-button
+            type="primary"
+            link
+            :loading="previewLoadingId === row.reportId"
+            @click="previewReport(row)"
+          >
             预览
           </el-button>
           <el-button type="primary" link :loading="openLoadingId === row.reportId" @click="openReport(row)">
             打开
           </el-button>
-          <el-button type="primary" link :loading="downloadLoadingId === row.reportId" @click="downloadReport(row)">
+          <el-button
+            type="primary"
+            link
+            :loading="downloadLoadingId === row.reportId"
+            @click="downloadReport(row)"
+          >
             下载
           </el-button>
         </template>
@@ -233,12 +243,9 @@ import {
 } from '../api/reports'
 
 type CategoryRow = { id: number; category: string }
+type FileBlobResult = { blob: Blob; fileName: string }
 
-type FileBlobResult = {
-  blob: Blob
-  fileName: string
-}
-
+// 动态类别
 const categories = ref<CategoryRow[]>([])
 const loadingCategories = ref(false)
 
@@ -301,7 +308,7 @@ async function loadCategories() {
   try {
     const data = await request<any[]>('/categories/query', { method: 'GET' })
     categories.value = (data || [])
-      .map((x) => ({ id: Number(x?.id), category: String(x?.category ?? '') }))
+      .map((x) => ({ id: Number(x?.id), category: String(x?.category ?? x?.name ?? '') }))
       .filter((x) => Number.isFinite(x.id) && x.category)
   } catch (e: unknown) {
     ElMessage.error(e instanceof Error ? e.message : '加载类别失败')
@@ -374,11 +381,15 @@ const doSearch = async (resetToFirstPage = false) => {
   if (!query.categoryId) return ElMessage.warning('请选择类别')
   if (resetToFirstPage) page.pageNo = 1
 
+  // 关键改动：优先用类别名称；找不到就回退用ID
+  const currentCategory =
+    categories.value.find((x) => x.id === query.categoryId)?.category ?? query.categoryId
+
   loadingSearch.value = true
   try {
     const data: SearchReportsResponseData = await apiSearchReports({
       filters: {
-        category: query.categoryId,
+        category: currentCategory,
         modelSpec: query.modelSpec || undefined,
         deviceCategory: query.componentCategory || undefined,
         vendor: query.manufacturerName || undefined,
@@ -430,10 +441,13 @@ const onSelectionChange = (rows: ReportListItem[]) => {
   selectedRows.value = rows
 }
 
+/* ===========================
+ * 下载文件名解析（增强版）
+ * =========================== */
+
 function decodeFileNameSafely(value: string): string {
   const s = String(value || '').trim()
   if (!s) return ''
-
   try {
     return decodeURIComponent(s)
   } catch {
@@ -449,7 +463,6 @@ function sanitizeDownloadFileName(value: string, fallbackName: string): string {
   const fallback = String(fallbackName || '').trim() || 'download'
   const name = String(value || '').trim()
   if (!name) return fallback
-
   const cleaned = name.replace(/[\\/:*?"<>|]/g, '_').trim()
   return cleaned || fallback
 }
@@ -461,10 +474,7 @@ function sanitizeDownloadFileName(value: string, fallbackName: string): string {
  * 2. filename=xxx
  * 3. fallbackName
  */
-function extractFileNameFromContentDisposition(
-  disposition: string | null,
-  fallbackName: string,
-): string {
+function extractFileNameFromContentDisposition(disposition: string | null, fallbackName: string): string {
   const fallback = String(fallbackName || '').trim() || 'download'
   if (!disposition) return fallback
 
@@ -475,19 +485,18 @@ function extractFileNameFromContentDisposition(
   }
 
   const quotedMatch = disposition.match(/filename\s*=\s*"([^"]+)"/i)
-  if (quotedMatch?.[1]) {
-    return sanitizeDownloadFileName(quotedMatch[1], fallback)
-  }
+  if (quotedMatch?.[1]) return sanitizeDownloadFileName(quotedMatch[1], fallback)
 
   const plainMatch = disposition.match(/filename\s*=\s*([^;]+)/i)
-  if (plainMatch?.[1]) {
-    return sanitizeDownloadFileName(stripQuotes(plainMatch[1]), fallback)
-  }
+  if (plainMatch?.[1]) return sanitizeDownloadFileName(stripQuotes(plainMatch[1]), fallback)
 
   return fallback
 }
 
-// ===== blob 预览/下载 =====
+/* ===========================
+ * blob 预览/打开/下载
+ * =========================== */
+
 const previewVisible = ref(false)
 const previewUrl = ref('')
 const previewLoadingId = ref<number | null>(null)
@@ -511,15 +520,9 @@ async function getFileBlobResult(row: ReportListItem): Promise<FileBlobResult> {
     res.headers.get('Content-Disposition') ||
     ''
 
-  const fileName = extractFileNameFromContentDisposition(
-    disposition,
-    row.fileName || 'report',
-  )
+  const fileName = extractFileNameFromContentDisposition(disposition, row.fileName || 'report')
 
-  return {
-    blob: res.blob,
-    fileName,
-  }
+  return { blob: res.blob, fileName }
 }
 
 async function getBlobUrlByRow(row: ReportListItem) {
@@ -581,7 +584,10 @@ const downloadReport = async (row: ReportListItem) => {
   }
 }
 
-// ===== 对比预览 =====
+/* ===========================
+ * 对比预览
+ * =========================== */
+
 const compareVisible = ref(false)
 const compareItems = ref<Array<{ reportId: number; fileName: string; url: string; loading: boolean }>>([])
 const compareUrlsToRevoke = ref<string[]>([])
