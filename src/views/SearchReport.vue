@@ -381,15 +381,11 @@ const doSearch = async (resetToFirstPage = false) => {
   if (!query.categoryId) return ElMessage.warning('请选择类别')
   if (resetToFirstPage) page.pageNo = 1
 
-  // 关键改动：优先用类别名称；找不到就回退用ID
-  const currentCategory =
-    categories.value.find((x) => x.id === query.categoryId)?.category ?? query.categoryId
-
   loadingSearch.value = true
   try {
     const data: SearchReportsResponseData = await apiSearchReports({
       filters: {
-        category: currentCategory,
+        category: query.categoryId,
         modelSpec: query.modelSpec || undefined,
         deviceCategory: query.componentCategory || undefined,
         vendor: query.manufacturerName || undefined,
@@ -408,6 +404,7 @@ const doSearch = async (resetToFirstPage = false) => {
     loadingSearch.value = false
   }
 }
+
 
 const onPageChange = async (p: number) => {
   page.pageNo = p
