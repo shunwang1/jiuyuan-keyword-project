@@ -137,9 +137,24 @@
       </el-table-column>
 
       <el-table-column prop="modelSpec" label="型号规格" min-width="160" />
-      <el-table-column prop="deviceCategory" label="元器件门类" min-width="150" />
-      <el-table-column prop="vendor" label="厂家信息" min-width="160" />
-      <el-table-column prop="batchNo" label="批号" min-width="140" />
+
+      <el-table-column label="元器件门类" min-width="150">
+        <template #default="{ row }">
+          {{ row.deviceCategory || row.componentCategory || '' }}
+        </template>
+      </el-table-column>
+
+      <el-table-column label="厂家信息" min-width="160">
+        <template #default="{ row }">
+          {{ row.vendor || row.manufacturerName || row.manufacture || '' }}
+        </template>
+      </el-table-column>
+
+      <el-table-column label="批号" min-width="140">
+        <template #default="{ row }">
+          {{ row.batchNo || row.batchNumber || '' }}
+        </template>
+      </el-table-column>
 
       <el-table-column label="状态" width="120">
         <template #default="{ row }">
@@ -245,6 +260,14 @@ import {
 type CategoryRow = { id: number; category: string }
 type FileBlobResult = { blob: Blob; fileName: string }
 
+// 为了兼容后端返回的不同字段名，放宽行类型
+type ReportRow = ReportListItem & {
+  componentCategory?: string
+  manufacturerName?: string
+  manufacture?: string
+  batchNumber?: string
+}
+
 // 动态类别
 const categories = ref<CategoryRow[]>([])
 const loadingCategories = ref(false)
@@ -298,10 +321,10 @@ const loadingOptions = reactive({
 
 const page = reactive({ pageNo: 1, pageSize: 15 })
 const total = ref(0)
-const result = ref<ReportListItem[]>([])
+const result = ref<ReportRow[]>([])
 const loadingSearch = ref(false)
 
-const selectedRows = ref<ReportListItem[]>([])
+const selectedRows = ref<ReportRow[]>([])
 
 async function loadCategories() {
   loadingCategories.value = true
@@ -395,7 +418,7 @@ const doSearch = async (resetToFirstPage = false) => {
       page: { ...page },
     })
 
-    result.value = data.list || []
+    result.value = (data.list || []) as ReportRow[]
     total.value = data.total || 0
     ElMessage.success('检索完成')
   } catch (e: unknown) {
@@ -404,7 +427,6 @@ const doSearch = async (resetToFirstPage = false) => {
     loadingSearch.value = false
   }
 }
-
 
 const onPageChange = async (p: number) => {
   page.pageNo = p
@@ -434,7 +456,7 @@ const resetForm = () => {
   cleanupCompareUrls()
 }
 
-const onSelectionChange = (rows: ReportListItem[]) => {
+const onSelectionChange = (rows: ReportRow[]) => {
   selectedRows.value = rows
 }
 
@@ -464,13 +486,6 @@ function sanitizeDownloadFileName(value: string, fallbackName: string): string {
   return cleaned || fallback
 }
 
-/**
- * 从 Content-Disposition 中提取文件名
- * 优先级：
- * 1. filename*=UTF-8''xxx
- * 2. filename=xxx
- * 3. fallbackName
- */
 function extractFileNameFromContentDisposition(disposition: string | null, fallbackName: string): string {
   const fallback = String(fallbackName || '').trim() || 'download'
   if (!disposition) return fallback
@@ -510,7 +525,7 @@ function cleanupPreviewUrl() {
   previewUrl.value = ''
 }
 
-async function getFileBlobResult(row: ReportListItem): Promise<FileBlobResult> {
+async function getFileBlobResult(row: ReportRow): Promise<FileBlobResult> {
   const res = await apiReportFileBlob(row.reportId)
   const disposition =
     res.headers.get('content-disposition') ||
@@ -522,12 +537,12 @@ async function getFileBlobResult(row: ReportListItem): Promise<FileBlobResult> {
   return { blob: res.blob, fileName }
 }
 
-async function getBlobUrlByRow(row: ReportListItem) {
+async function getBlobUrlByRow(row: ReportRow) {
   const { blob } = await getFileBlobResult(row)
   return URL.createObjectURL(blob)
 }
 
-const previewReport = async (row: ReportListItem) => {
+const previewReport = async (row: ReportRow) => {
   cleanupPreviewUrl()
   previewLoadingId.value = row.reportId
   try {
@@ -547,7 +562,7 @@ const openPreviewInNewTab = () => {
   window.open(previewUrl.value, '_blank')
 }
 
-const openReport = async (row: ReportListItem) => {
+const openReport = async (row: ReportRow) => {
   openLoadingId.value = row.reportId
   try {
     const url = await getBlobUrlByRow(row)
@@ -560,7 +575,7 @@ const openReport = async (row: ReportListItem) => {
   }
 }
 
-const downloadReport = async (row: ReportListItem) => {
+const downloadReport = async (row: ReportRow) => {
   downloadLoadingId.value = row.reportId
   try {
     const { blob, fileName } = await getFileBlobResult(row)
