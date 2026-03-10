@@ -1,6 +1,9 @@
 // src/api/reports.ts
-// 报告管理相关API接口（按最新后端文档对齐：upload字段、file下载参数）
-// + 上传页下拉（query/add/delete）
+// 报告管理相关API接口（按当前前后端联调需求整理）
+// - 上传
+// - 搜索
+// - 文件下载（blob + headers）
+// - 上传页下拉 query/add/delete
 
 import { request, type BlobResponse } from './http'
 import { USE_MOCK_API } from '../config/dev'
@@ -97,7 +100,7 @@ export interface ReportDetailResponseData {
  */
 export function apiUploadReport(params: UploadReportParams) {
   const fd = new FormData()
-  fd.append('file', params.file) // 必须是 File
+  fd.append('file', params.file)
   fd.append('category', String(params.category))
   fd.append('modelSpec', params.modelSpec)
   fd.append('componentCategory', params.componentCategory)
@@ -123,6 +126,16 @@ export function apiReportFileBlob(id: number | string) {
 
 /**
  * 搜索报告
+ *
+ * 当前按更贴近上传页字段的方式传参：
+ * - category
+ * - keyword(可重复)
+ * - modelSpec
+ * - componentCategory
+ * - manufacturerName
+ * - batchNumber
+ * - pageNo
+ * - pageSize
  */
 export async function apiSearchReports({ filters, page }: SearchReportsParams) {
   if (USE_MOCK_API) {
@@ -130,27 +143,35 @@ export async function apiSearchReports({ filters, page }: SearchReportsParams) {
   }
 
   const params = new URLSearchParams()
+
+  // 类别
   params.set('category', String(filters.category))
 
+  // 关键词：重复 keyword 参数
   for (const kw of filters.keywords || []) {
     const s = (kw ?? '').toString().trim()
     if (s) params.append('keyword', s)
   }
 
+  // 型号规格
   const modelSpec = (filters.modelSpec ?? '').toString().trim()
   if (modelSpec) params.set('modelSpec', modelSpec)
 
+  // 元器件门类
   const componentCategory = (filters.deviceCategory ?? '').toString().trim()
   if (componentCategory) params.set('componentCategory', componentCategory)
 
-  const manufacture = (filters.vendor ?? '').toString().trim()
-  if (manufacture) params.set('manufacture', manufacture)
+  // 厂家
+  const manufacturerName = (filters.vendor ?? '').toString().trim()
+  if (manufacturerName) params.set('manufacturerName', manufacturerName)
 
+  // 批号
   const batchNumber = (filters.batchNo ?? '').toString().trim()
   if (batchNumber) params.set('batchNumber', batchNumber)
 
+  // 分页
   const p = Number(page.pageNo)
-  if (Number.isFinite(p) && p > 0) params.set('page', String(Math.floor(p)))
+  if (Number.isFinite(p) && p > 0) params.set('pageNo', String(Math.floor(p)))
 
   const ps = Number(page.pageSize)
   if (Number.isFinite(ps) && ps > 0) params.set('pageSize', String(Math.min(15, Math.floor(ps))))
