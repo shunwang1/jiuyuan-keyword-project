@@ -12,14 +12,42 @@ export interface KeywordsQueryResponseData {
 /**
  * 查询关键词
  * GET /api/v1/keywords/query?category=1
+ *
+ * 兼容后端不同返回结构：
+ * - 直接返回 string[]
+ * - 返回 { keywords: string[] }
+ * - 返回 { list: string[] }
+ * - 返回 { data: { keywords/list } }（如果某些网关又包了一层）
  */
 export async function apiQueryKeywords(categoryId: number): Promise<KeywordsQueryResponseData> {
   if (USE_MOCK_API) return mockKeywordsQuery(String(categoryId))
 
-  return request<KeywordsQueryResponseData>(
-    `/keywords/query?category=${encodeURIComponent(categoryId)}`,
-    { method: 'GET' },
-  )
+  const raw = await request<any>(`/keywords/query?category=${encodeURIComponent(categoryId)}`, {
+    method: 'GET',
+  })
+
+  const pickList = (v: any): string[] => {
+    if (Array.isArray(v)) return v.map((x) => String(x)).map((s) => s.trim()).filter(Boolean)
+    return []
+  }
+
+  // 1) string[]
+  if (Array.isArray(raw)) return { keywords: pickList(raw) }
+
+  // 2) { keywords: [] } / { list: [] }
+  if (raw && typeof raw === 'object') {
+    if (Array.isArray(raw.keywords)) return { keywords: pickList(raw.keywords) }
+    if (Array.isArray(raw.list)) return { keywords: pickList(raw.list) }
+
+    // 3) { data: { keywords/list } }
+    const d = (raw as any).data
+    if (d && typeof d === 'object') {
+      if (Array.isArray(d.keywords)) return { keywords: pickList(d.keywords) }
+      if (Array.isArray(d.list)) return { keywords: pickList(d.list) }
+    }
+  }
+
+  return { keywords: [] }
 }
 
 /**

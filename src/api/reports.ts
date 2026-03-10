@@ -112,7 +112,7 @@ export function apiUploadReport(params: UploadReportParams) {
 
 /**
  * 下载报告文件（blob + headers）
- * 新接口：GET /api/v1/reports/file?id=1
+ * GET /api/v1/reports/file?id=1
  */
 export function apiReportFileBlob(id: number | string) {
   return request<BlobResponse>(`/reports/file?id=${encodeURIComponent(id)}`, {
@@ -122,7 +122,7 @@ export function apiReportFileBlob(id: number | string) {
 }
 
 /**
- * 搜索报告（保留旧实现）
+ * 搜索报告
  */
 export async function apiSearchReports({ filters, page }: SearchReportsParams) {
   if (USE_MOCK_API) {
@@ -171,13 +171,20 @@ export interface CategoryItem {
   name: string
 }
 
+/**
+ * 查询类别
+ * 兼容后端不同字段：
+ * - id/categoryId/value
+ * - name/categoryName/category/label
+ */
 export async function apiQueryCategories(): Promise<CategoryItem[]> {
   const data = await request<any>('/categories/query', { method: 'GET' })
   const list: any[] = Array.isArray(data) ? data : Array.isArray(data?.list) ? data.list : []
+
   return list
     .map((x) => ({
-      id: Number(x.id ?? x.categoryId ?? x.value),
-      name: String(x.name ?? x.categoryName ?? x.label ?? ''),
+      id: Number(x?.id ?? x?.categoryId ?? x?.value),
+      name: String(x?.name ?? x?.categoryName ?? x?.category ?? x?.label ?? ''),
     }))
     .filter((x) => Number.isFinite(x.id) && x.name)
 }
@@ -185,7 +192,7 @@ export async function apiQueryCategories(): Promise<CategoryItem[]> {
 function mapToStringList(data: any): string[] {
   const list: any[] = Array.isArray(data) ? data : Array.isArray(data?.list) ? data.list : []
   return list
-    .map((x) => (typeof x === 'string' ? x : String(x.name ?? x.value ?? x.label ?? x)))
+    .map((x) => (typeof x === 'string' ? x : String(x?.name ?? x?.value ?? x?.label ?? x)))
     .map((s) => s.trim())
     .filter(Boolean)
 }
