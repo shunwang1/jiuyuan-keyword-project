@@ -213,7 +213,7 @@ export async function apiReportPreviewBlob(id: number | string): Promise<BlobRes
  * 更新报告状态
  * PATCH /api/v1/reports/{id}/status?status=1001|1002|1003
  */
-export function apiUpdateReportStatus(params: { id: number | string; status: ReportStatusCode }) {
+export function apiUpdateReportStatus(params: { id: number | string; status: number }) {
   const qs = new URLSearchParams({ status: String(params.status) }).toString()
   return request<null>(`/reports/${params.id}/status?${qs}`, {
     method: 'PATCH',

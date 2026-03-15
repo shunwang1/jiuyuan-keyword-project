@@ -50,7 +50,7 @@ export interface CreateUserParams {
  * 创建新用户（旧接口，保留不动）
  */
 export function apiCreateUser({ username, password, dept, role }: CreateUserParams) {
-  return request<null>('/users/create', {
+  return request<null>('/users/add', {
     method: 'POST',
     body: { username, password, dept, role },
   })
