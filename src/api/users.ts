@@ -14,30 +14,30 @@ export interface UserListItem {
   // password?: string
 }
 
-export interface PageParams {
-  pageNo: number
-  pageSize: number
-}
-
-export interface UsersPageRequest {
-  pageNo: number
-  pageSize: number
-}
-
-export interface UsersPageResponseData {
-  list: UserListItem[]
-  total: number
-}
+// 下面这几个是分页旧接口用到的类型，已废弃，直接删掉：
+// export interface PageParams {
+//   pageNo: number
+//   pageSize: number
+// }
+// export interface UsersPageRequest {
+//   pageNo: number
+//   pageSize: number
+// }
+// export interface UsersPageResponseData {
+//   list: UserListItem[]
+//   total: number
+// }
 
 /**
- * 分页查询用户列表（旧接口，保留不动）
+ * 分页查询用户列表（旧接口，已废弃）
+ * 你要求删除 page 接口，这里直接移除函数定义
  */
-export function apiUsersPage({ pageNo, pageSize }: UsersPageRequest) {
-  return request<UsersPageResponseData>('/users/page', {
-    method: 'POST',
-    body: { page: { pageNo, pageSize } as PageParams },
-  })
-}
+// export function apiUsersPage({ pageNo, pageSize }: UsersPageRequest) {
+//   return request<UsersPageResponseData>('/users/page', {
+//     method: 'POST',
+//     body: { page: { pageNo, pageSize } as PageParams },
+//   })
+// }
 
 export interface CreateUserParams {
   username: string
