@@ -23,7 +23,7 @@
       </el-form-item>
 
       <!-- 厂家信息（推荐第一步） -->
-      <el-form-item label="厂家">
+      <el-form-item label="厂家信息">
         <el-select
           v-model="query.manufacturerName"
           placeholder="请先选择厂家（推荐）"
@@ -37,8 +37,8 @@
         </el-select>
       </el-form-item>
 
-      <!-- 元器件门类（第二步） -->
-      <el-form-item label="门类">
+      <!-- 元器件门类 -->
+      <el-form-item label="元器件门类">
         <el-select
           v-model="query.componentCategory"
           placeholder="请选择元器件门类"
@@ -52,7 +52,7 @@
         </el-select>
       </el-form-item>
 
-      <!-- 型号规格（第三步） -->
+      <!-- 型号规格 -->
       <el-form-item label="型号规格">
         <el-select
           v-model="query.modelSpec"
@@ -67,7 +67,7 @@
         </el-select>
       </el-form-item>
 
-      <!-- 批号（第四步，可选） -->
+      <!-- 批号 -->
       <el-form-item label="批号">
         <el-select
           v-model="query.batchNumber"
@@ -82,7 +82,7 @@
         </el-select>
       </el-form-item>
 
-      <!-- 关键词（最后可选） -->
+      <!-- 关键词 -->
       <el-form-item label="关键词">
         <el-select
           v-model="query.keywords"
@@ -162,7 +162,7 @@
         </template>
       </el-table-column>
 
-      <el-table-column label="操作" width="240">
+      <el-table-column label="操作" width="320">
         <template #default="{ row }">
           <el-button
             type="primary"
@@ -182,6 +182,9 @@
             @click="downloadReport(row)"
           >
             下载
+          </el-button>
+          <el-button type="primary" link @click="openStatusDialog(row)">
+            更新状态
           </el-button>
         </template>
       </el-table-column>
@@ -240,6 +243,38 @@
         <el-button @click="compareVisible = false">关闭</el-button>
       </template>
     </el-dialog>
+
+    <!-- 更新状态对话框 -->
+    <el-dialog
+      v-model="statusDialogVisible"
+      title="更新报告状态"
+      width="420px"
+      :destroy-on-close="true"
+    >
+      <el-form label-width="90px">
+        <el-form-item label="当前状态">
+          <span>{{ statusLabel(statusForm.currentStatus) || '未知' }}</span>
+        </el-form-item>
+        <el-form-item label="新状态" required>
+          <el-select
+            v-model="statusForm.newStatus"
+            placeholder="请选择新状态"
+            style="width: 260px"
+          >
+            <el-option :value="1001" label="1001 待处理" />
+            <el-option :value="1002" label="1002 已通过" />
+            <el-option :value="1003" label="1003 已拒绝" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+
+      <template #footer>
+        <el-button @click="statusDialogVisible = false">取消</el-button>
+        <el-button type="primary" :loading="statusUpdating" @click="submitStatusUpdate">
+          确定
+        </el-button>
+      </template>
+    </el-dialog>
   </el-card>
 </template>
 
@@ -256,6 +291,7 @@ import {
   apiQueryComponentCategories,
   apiQueryManufacturers,
   apiQueryBatchNumbers,
+  apiUpdateReportStatus,
   type ReportListItem,
   type SearchReportsResponseData,
 } from '../api/reports'
@@ -589,6 +625,45 @@ const downloadReport = async (row: ReportRow) => {
     ElMessage.error(e instanceof Error ? e.message : '下载失败')
   } finally {
     downloadLoadingId.value = null
+  }
+}
+
+// 更新状态相关
+const statusDialogVisible = ref(false)
+const statusUpdating = ref(false)
+const statusForm = reactive<{ reportId: number | null; currentStatus: number | null; newStatus: number | null }>({
+  reportId: null,
+  currentStatus: null,
+  newStatus: null,
+})
+
+const openStatusDialog = (row: ReportRow) => {
+  statusForm.reportId = row.reportId
+  const current = typeof row.status === 'number' ? row.status : Number(row.status)
+  statusForm.currentStatus = Number.isFinite(current) ? current : null
+  statusForm.newStatus = statusForm.currentStatus
+  statusDialogVisible.value = true
+}
+
+const submitStatusUpdate = async () => {
+  if (!statusForm.reportId) return ElMessage.warning('缺少报告ID')
+  if (!statusForm.newStatus) return ElMessage.warning('请选择新的状态')
+
+  statusUpdating.value = true
+  try {
+    await apiUpdateReportStatus({ id: statusForm.reportId, status: statusForm.newStatus as any })
+    ElMessage.success('状态更新成功')
+
+    const target = result.value.find((r) => r.reportId === statusForm.reportId)
+    if (target) {
+      target.status = statusForm.newStatus as any
+    }
+
+    statusDialogVisible.value = false
+  } catch (e: unknown) {
+    ElMessage.error(e instanceof Error ? e.message : '更新状态失败')
+  } finally {
+    statusUpdating.value = false
   }
 }
 
