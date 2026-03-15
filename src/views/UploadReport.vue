@@ -21,22 +21,27 @@
         </div>
       </el-form-item>
 
-      <!-- 型号规格 -->
-      <el-form-item label="型号规格" required>
+      <!-- 厂家（推荐第一步） -->
+      <el-form-item label="厂家">
         <div class="row">
           <el-select
-            v-model="form.modelSpec"
-            placeholder="请选择型号规格"
+            v-model="form.manufacturerName"
+            placeholder="请选择厂家（可选）"
             style="width: 460px"
             filterable
             clearable
             :disabled="!form.categoryId"
-            :loading="loading.modelSpecs"
+            :loading="loading.manufacturers"
           >
-            <el-option v-for="x in modelSpecs" :key="x" :label="x" :value="x" />
+            <el-option v-for="x in manufacturers" :key="x" :label="x" :value="x" />
           </el-select>
 
-          <el-button type="primary" plain :disabled="!form.categoryId" @click="openAdd('modelSpec')">
+          <el-button
+            type="primary"
+            plain
+            :disabled="!form.categoryId"
+            @click="openAdd('manufacturerName')"
+          >
             增加
           </el-button>
 
@@ -44,21 +49,21 @@
             v-if="auth.isAdmin"
             type="danger"
             plain
-            :disabled="!form.categoryId || !form.modelSpec"
-            :loading="deleting.modelSpec"
-            @click="onDelete('modelSpec')"
+            :disabled="!form.categoryId || !form.manufacturerName"
+            :loading="deleting.manufacturerName"
+            @click="onDelete('manufacturerName')"
           >
             删除
           </el-button>
         </div>
       </el-form-item>
 
-      <!-- 元器件门类 -->
-      <el-form-item label="门类" required>
+      <!-- 元器件门类（原本必填，这里只在界面提示，不在逻辑中强制） -->
+      <el-form-item label="门类">
         <div class="row">
           <el-select
             v-model="form.componentCategory"
-            placeholder="请选择元器件门类"
+            placeholder="请选择元器件门类（可选）"
             style="width: 460px"
             filterable
             clearable
@@ -90,27 +95,22 @@
         </div>
       </el-form-item>
 
-      <!-- 厂家 -->
-      <el-form-item label="厂家">
+      <!-- 型号规格（原本必填，这里改为可选） -->
+      <el-form-item label="型号规格">
         <div class="row">
           <el-select
-            v-model="form.manufacturerName"
-            placeholder="请选择厂家（可选）"
+            v-model="form.modelSpec"
+            placeholder="请选择型号规格（可选）"
             style="width: 460px"
             filterable
             clearable
             :disabled="!form.categoryId"
-            :loading="loading.manufacturers"
+            :loading="loading.modelSpecs"
           >
-            <el-option v-for="x in manufacturers" :key="x" :label="x" :value="x" />
+            <el-option v-for="x in modelSpecs" :key="x" :label="x" :value="x" />
           </el-select>
 
-          <el-button
-            type="primary"
-            plain
-            :disabled="!form.categoryId"
-            @click="openAdd('manufacturerName')"
-          >
+          <el-button type="primary" plain :disabled="!form.categoryId" @click="openAdd('modelSpec')">
             增加
           </el-button>
 
@@ -118,9 +118,9 @@
             v-if="auth.isAdmin"
             type="danger"
             plain
-            :disabled="!form.categoryId || !form.manufacturerName"
-            :loading="deleting.manufacturerName"
-            @click="onDelete('manufacturerName')"
+            :disabled="!form.categoryId || !form.modelSpec"
+            :loading="deleting.modelSpec"
+            @click="onDelete('modelSpec')"
           >
             删除
           </el-button>
@@ -172,7 +172,8 @@
       </el-form-item>
 
       <div style="color:#999; font-size:12px; line-height:1.6">
-        必填：category / modelSpec / componentCategory；可选：manufacturerName / batchNumber。<br />
+        必填：category；<br />
+        可选：manufacturerName / componentCategory / modelSpec / batchNumber。<br />
         新增：普通用户可用；删除：管理员按钮可见（后端也会校验）。
       </div>
     </el-form>
@@ -282,7 +283,6 @@ async function loadCategories() {
 }
 
 async function loadDependents(categoryId: number) {
-  // reset values + options
   form.modelSpec = ''
   form.componentCategory = ''
   form.manufacturerName = ''
@@ -329,7 +329,6 @@ const onFileChange = (e: Event) => {
   fileRef.value = input.files?.[0] || null
 }
 
-// ===== add/delete =====
 type FieldKey = 'modelSpec' | 'componentCategory' | 'manufacturerName' | 'batchNumber'
 
 const addDialog = reactive<{
@@ -444,7 +443,6 @@ async function onDelete(field: FieldKey) {
       form.batchNumber = ''
     }
   } catch (e: unknown) {
-    // 点取消直接忽略
     if (e instanceof Error && (e as any).message?.includes('cancel')) return
     handleApiError(e, '删除失败')
   } finally {
@@ -458,8 +456,7 @@ async function onDelete(field: FieldKey) {
 // ===== upload =====
 const onUpload = async () => {
   if (!form.categoryId) return ElMessage.warning('请选择报告类别')
-  if (!form.modelSpec.trim()) return ElMessage.warning('请选择型号规格（modelSpec）')
-  if (!form.componentCategory.trim()) return ElMessage.warning('请选择门类（componentCategory）')
+  // 型号规格/门类改为可选，不再强制校验
   if (!fileRef.value) return ElMessage.warning('请选择要上传的文件（File）')
 
   uploading.value = true
@@ -467,21 +464,27 @@ const onUpload = async () => {
     await apiUploadReport({
       file: fileRef.value,
       category: form.categoryId,
-      modelSpec: form.modelSpec.trim(),
-      componentCategory: form.componentCategory.trim(),
+      modelSpec: form.modelSpec.trim() || undefined,
+      componentCategory: form.componentCategory.trim() || undefined,
       manufacturerName: form.manufacturerName.trim() || undefined,
       batchNumber: form.batchNumber.trim() || undefined,
     })
 
     ElMessage.success('上传成功')
 
-    // reset（保留 category 便于继续上传同类）
     form.modelSpec = ''
     form.componentCategory = ''
     form.manufacturerName = ''
     form.batchNumber = ''
     fileRef.value = null
   } catch (e: unknown) {
+    const err = e as Partial<RequestError>
+    const msg = e instanceof Error ? e.message : ''
+
+    if (err?.code === 409 || /重复|已存在/i.test(msg)) {
+      return ElMessage.error('上传失败：文件名已存在，请更换文件名后重试')
+    }
+
     handleApiError(e, '上传失败（可能文件名重复）')
   } finally {
     uploading.value = false

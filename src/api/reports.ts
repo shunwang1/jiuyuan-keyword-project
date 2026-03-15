@@ -164,6 +164,52 @@ export async function apiReportFileBlob(id: number | string): Promise<BlobRespon
 }
 
 /**
+ * 预览报告（获取 PDF blob）
+ * GET /api/v1/reports/preview?id={reportId}
+ * 请求头：token
+ * 返回：PDF blob + headers + status
+ */
+export async function apiReportPreviewBlob(id: number | string): Promise<BlobResponse> {
+  const token = readToken()
+  const url = `/api/v1/reports/preview?id=${encodeURIComponent(id)}`
+
+  const headers: Record<string, string> = {}
+  if (token) headers.token = token
+
+  const resp = await fetch(url, {
+    method: 'GET',
+    headers,
+  })
+
+  if (!resp.ok) {
+    let message = `HTTP ${resp.status}`
+
+    try {
+      const ct = resp.headers.get('content-type') || ''
+      if (ct.includes('application/json')) {
+        const payload = await resp.json()
+        message = payload?.msg || message
+      } else {
+        const text = await resp.text()
+        if (text) message = text
+      }
+    } catch {
+      // ignore
+    }
+
+    throw new Error(message)
+  }
+
+  const blob = await resp.blob()
+
+  return {
+    blob,
+    headers: resp.headers,
+    status: resp.status,
+  }
+}
+
+/**
  * 搜索报告
  * 兼容当前联调：
  * - category 传数字ID

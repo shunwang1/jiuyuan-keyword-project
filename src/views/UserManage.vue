@@ -5,7 +5,7 @@
     </template>
 
     <div style="display:flex; justify-content:space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px">
-      <div style="color:#666">最多一次性展示 15 位用户</div>
+      <div style="color:#666">最多一次性展示 15 位用户（列表与新增仍使用旧接口）</div>
       <el-button type="primary" @click="openAddDialog">增加用户</el-button>
     </div>
 
@@ -14,16 +14,21 @@
       <el-table-column prop="password" label="用户密码" min-width="150" />
       <el-table-column prop="dept" label="用户部门名称" min-width="160" />
 
-      <el-table-column label="权限级别" width="160">
+      <el-table-column label="权限级别" width="200">
         <template #default="{ row }">
-          <el-select v-model="row.role" style="width: 120px" @change="onRoleChange(row)">
+          <!-- securityLevelForPatch：本地字段，0 管理员 / 1 普通用户 -->
+          <el-select
+            v-model="row.securityLevelForPatch"
+            style="width: 140px"
+            @change="onRoleChange(row)"
+          >
             <el-option :value="0" label="0 管理员" />
             <el-option :value="1" label="1 普通用户" />
           </el-select>
         </template>
       </el-table-column>
 
-      <el-table-column label="冻结账户" width="160">
+      <el-table-column label="冻结账户" width="180">
         <template #default="{ row }">
           <!-- 0=冻结，1=正常 -->
           <el-switch
@@ -74,7 +79,11 @@
     </el-dialog>
 
     <div style="margin-top: 10px; color:#999; font-size:12px; line-height: 1.6">
-      安全建议：后端最好不要返回明文密码；前端可改为"重置密码"。
+      安全建议：后端最好不要返回明文密码；前端可改为“重置密码”。<br />
+      说明：<br />
+      - 查询/分页/新增/旧角色更新仍使用 /users/... 旧接口。<br />
+      - 冻结/解冻用户使用 PATCH /api/v1/auth/users/{id}/status。<br />
+      - 修改权限使用 PATCH /api/v1/auth/users/{id}/security-level。
     </div>
   </el-card>
 </template>
@@ -87,6 +96,7 @@ import {
   apiCreateUser,
   apiUpdateUserRole,
   apiPatchUserStatus,
+  apiPatchUserSecurityLevel,
   type UserListItem,
   type UserRole,
   type UserStatusCode,
@@ -94,8 +104,10 @@ import {
 
 type UserRow = UserListItem & {
   password?: string
-  // 新增：后端字典 AccountCode: 0 冻结 / 1 正常
+  // 后端字典 AccountCode: 0 冻结 / 1 正常
   statusCode: UserStatusCode
+  // 新增：用于新接口 securityLevel（0 管理员 / 1 普通用户）
+  securityLevelForPatch: 0 | 1
 }
 
 const loading = ref(false)
@@ -109,6 +121,8 @@ const mapToRow = (u: UserListItem): UserRow => {
   return {
     ...u,
     statusCode: u.frozen ? 0 : 1,
+    // role: 0/1 -> securityLevelForPatch 对齐新接口
+    securityLevelForPatch: u.role === 0 ? 0 : 1,
   }
 }
 
@@ -134,12 +148,25 @@ const onPageChange = async (p: number) => {
 }
 
 const onRoleChange = async (row: UserRow) => {
+  const newSecurityLevel = row.securityLevelForPatch
+
   try {
-    // 保留原有功能：仍调用旧 API（后端若已兼容即可）
-    await apiUpdateUserRole({ userId: row.userId, role: row.role as UserRole })
+    // 1) 调用新接口：修改 securityLevel
+    await apiPatchUserSecurityLevel({ id: row.userId, securityLevel: newSecurityLevel })
+
+    // 2) 同步旧字段 role（保持 0 管理员 / 1 普通用户）
+    row.role = newSecurityLevel as UserRole
+
+    // 3) 兼容调用旧接口（如果后端已经不需要，可删除这一段）
+    try {
+      await apiUpdateUserRole({ userId: row.userId, role: row.role as UserRole })
+    } catch {
+      // 旧接口调用失败不阻塞整体，可忽略或记录日志
+    }
+
     ElMessage.success('权限已更新')
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : '更新失败'
+    const msg = e instanceof Error ? e.message : '更新权限失败'
     ElMessage.error(msg)
     await loadPage()
   }

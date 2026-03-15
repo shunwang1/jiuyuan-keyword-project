@@ -5,6 +5,7 @@
     </template>
 
     <el-form label-width="110px" style="max-width: 980px">
+      <!-- 报告类别：先选 -->
       <el-form-item label="报告类别" required>
         <el-select
           v-model="query.categoryId"
@@ -17,10 +18,71 @@
           <el-option v-for="c in categories" :key="c.id" :label="c.category" :value="c.id" />
         </el-select>
         <div style="color:#999; font-size:12px; margin-left: 12px">
-          先选择类别，系统会自动加载型号规格/门类/厂家/批号的候选项
+          先选择类别，系统会自动加载厂家/门类/型号规格/批号的候选项
         </div>
       </el-form-item>
 
+      <!-- 厂家信息（推荐第一步） -->
+      <el-form-item label="厂家">
+        <el-select
+          v-model="query.manufacturerName"
+          placeholder="请先选择厂家（推荐）"
+          style="width: 520px"
+          filterable
+          clearable
+          :disabled="!query.categoryId"
+          :loading="loadingOptions.manufacturers"
+        >
+          <el-option v-for="x in options.manufacturers" :key="x" :label="x" :value="x" />
+        </el-select>
+      </el-form-item>
+
+      <!-- 元器件门类（第二步） -->
+      <el-form-item label="门类">
+        <el-select
+          v-model="query.componentCategory"
+          placeholder="请选择元器件门类"
+          style="width: 520px"
+          filterable
+          clearable
+          :disabled="!query.categoryId"
+          :loading="loadingOptions.componentCategories"
+        >
+          <el-option v-for="x in options.componentCategories" :key="x" :label="x" :value="x" />
+        </el-select>
+      </el-form-item>
+
+      <!-- 型号规格（第三步） -->
+      <el-form-item label="型号规格">
+        <el-select
+          v-model="query.modelSpec"
+          placeholder="请选择型号规格"
+          style="width: 520px"
+          filterable
+          clearable
+          :disabled="!query.categoryId"
+          :loading="loadingOptions.modelSpecs"
+        >
+          <el-option v-for="x in options.modelSpecs" :key="x" :label="x" :value="x" />
+        </el-select>
+      </el-form-item>
+
+      <!-- 批号（第四步，可选） -->
+      <el-form-item label="批号">
+        <el-select
+          v-model="query.batchNumber"
+          placeholder="请选择批号（可选）"
+          style="width: 520px"
+          filterable
+          clearable
+          :disabled="!query.categoryId"
+          :loading="loadingOptions.batchNumbers"
+        >
+          <el-option v-for="x in options.batchNumbers" :key="x" :label="x" :value="x" />
+        </el-select>
+      </el-form-item>
+
+      <!-- 关键词（最后可选） -->
       <el-form-item label="关键词">
         <el-select
           v-model="query.keywords"
@@ -38,62 +100,7 @@
         </el-select>
       </el-form-item>
 
-      <el-form-item label="型号规格">
-        <el-select
-          v-model="query.modelSpec"
-          placeholder="请选择型号规格"
-          style="width: 520px"
-          filterable
-          clearable
-          :disabled="!query.categoryId"
-          :loading="loadingOptions.modelSpecs"
-        >
-          <el-option v-for="x in options.modelSpecs" :key="x" :label="x" :value="x" />
-        </el-select>
-      </el-form-item>
-
-      <el-form-item label="元器件门类">
-        <el-select
-          v-model="query.componentCategory"
-          placeholder="请选择元器件门类"
-          style="width: 520px"
-          filterable
-          clearable
-          :disabled="!query.categoryId"
-          :loading="loadingOptions.componentCategories"
-        >
-          <el-option v-for="x in options.componentCategories" :key="x" :label="x" :value="x" />
-        </el-select>
-      </el-form-item>
-
-      <el-form-item label="厂家信息">
-        <el-select
-          v-model="query.manufacturerName"
-          placeholder="请选择厂家信息"
-          style="width: 520px"
-          filterable
-          clearable
-          :disabled="!query.categoryId"
-          :loading="loadingOptions.manufacturers"
-        >
-          <el-option v-for="x in options.manufacturers" :key="x" :label="x" :value="x" />
-        </el-select>
-      </el-form-item>
-
-      <el-form-item label="批号">
-        <el-select
-          v-model="query.batchNumber"
-          placeholder="请选择批号"
-          style="width: 520px"
-          filterable
-          clearable
-          :disabled="!query.categoryId"
-          :loading="loadingOptions.batchNumbers"
-        >
-          <el-option v-for="x in options.batchNumbers" :key="x" :label="x" :value="x" />
-        </el-select>
-      </el-form-item>
-
+      <!-- 操作按钮 -->
       <el-form-item>
         <el-button type="primary" :loading="loadingSearch" @click="doSearch(true)">检索</el-button>
         <el-button :disabled="loadingSearch" @click="resetForm">重置</el-button>
@@ -107,7 +114,7 @@
         </el-button>
 
         <div style="color:#999; font-size:12px; margin-top: 6px">
-          提示：在下方表格勾选 2 或 3 份报告后，可进行对比预览。
+          推荐选择顺序：厂家 → 门类 → 型号规格 → 批号 → 关键词。
         </div>
       </el-form-item>
     </el-form>
@@ -190,6 +197,7 @@
       />
     </div>
 
+    <!-- 单份预览 -->
     <el-dialog
       v-model="previewVisible"
       title="报告预览"
@@ -205,10 +213,13 @@
 
       <template #footer>
         <el-button @click="previewVisible = false">关闭</el-button>
-        <el-button type="primary" :disabled="!previewUrl" @click="openPreviewInNewTab">新窗口打开</el-button>
+        <el-button type="primary" :disabled="!previewUrl" @click="openPreviewInNewTab">
+          新窗口打开
+        </el-button>
       </template>
     </el-dialog>
 
+    <!-- 对比预览 -->
     <el-dialog
       v-model="compareVisible"
       title="报告对比预览"
@@ -240,6 +251,7 @@ import { apiQueryKeywords } from '../api/keywords'
 import {
   apiSearchReports,
   apiReportFileBlob,
+  apiReportPreviewBlob,
   apiQueryModelSpecs,
   apiQueryComponentCategories,
   apiQueryManufacturers,
@@ -502,6 +514,12 @@ async function getDownloadResource(reportId: number | string) {
   return { blob, fileName }
 }
 
+async function getPreviewUrlByReportId(reportId: number | string) {
+  const res = await apiReportPreviewBlob(reportId)
+  const pdfBlob = new Blob([res.blob], { type: 'application/pdf' })
+  return URL.createObjectURL(pdfBlob)
+}
+
 const previewVisible = ref(false)
 const previewUrl = ref('')
 const previewLoadingId = ref<number | null>(null)
@@ -518,21 +536,18 @@ function cleanupPreviewUrl() {
   previewUrl.value = ''
 }
 
-async function getBlobUrlByRow(row: ReportRow) {
-  const { blob } = await getDownloadResource(row.reportId)
-  return URL.createObjectURL(blob)
-}
-
 const previewReport = async (row: ReportRow) => {
   cleanupPreviewUrl()
   previewLoadingId.value = row.reportId
   try {
-    const url = await getBlobUrlByRow(row)
+    const url = await getPreviewUrlByReportId(row.reportId)
     previewUrl.value = url
     previewUrlToRevoke = url
     previewVisible.value = true
   } catch (e: unknown) {
-    ElMessage.error(e instanceof Error ? e.message : '预览失败')
+    ElMessage.error(
+      e instanceof Error ? e.message : '预览失败（当前文件暂不可预览，请尝试下载原文件）',
+    )
   } finally {
     previewLoadingId.value = null
   }
@@ -546,11 +561,13 @@ const openPreviewInNewTab = () => {
 const openReport = async (row: ReportRow) => {
   openLoadingId.value = row.reportId
   try {
-    const url = await getBlobUrlByRow(row)
+    const url = await getPreviewUrlByReportId(row.reportId)
     window.open(url, '_blank')
     window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
   } catch (e: unknown) {
-    ElMessage.error(e instanceof Error ? e.message : '打开失败')
+    ElMessage.error(
+      e instanceof Error ? e.message : '打开失败（当前文件暂不可预览，请尝试下载原文件）',
+    )
   } finally {
     openLoadingId.value = null
   }
@@ -603,10 +620,7 @@ const openCompare = async () => {
   await Promise.all(
     compareItems.value.map(async (it) => {
       try {
-        const row = selectedRows.value.find((x) => x.reportId === it.reportId)
-        if (!row) throw new Error('报告不存在')
-
-        const url = await getBlobUrlByRow(row)
+        const url = await getPreviewUrlByReportId(it.reportId)
         it.url = url
         it.loading = false
         compareUrlsToRevoke.value.push(url)

@@ -112,3 +112,43 @@ export function apiPatchUserSecurityLevel(params: { id: number; securityLevel: 0
   const qs = new URLSearchParams({ securityLevel: String(params.securityLevel) }).toString()
   return request<null>(`/auth/users/${params.id}/security-level?${qs}`, { method: 'PATCH' })
 }
+
+/* ===========================
+ * 新增：查询所有用户（对齐后端最新说明）
+ * GET /api/v1/auth/users/query
+ * =========================== */
+
+export interface AuthUserItem {
+  username: string
+  securityLevel: 0 | 1 | 2
+  departmentId: number
+}
+
+export interface AuthUsersQueryResponse {
+  list: AuthUserItem[]
+}
+
+/**
+ * 新接口：查询所有用户
+ * 后端：GET /api/v1/auth/users/query
+ *
+ * 返回 data 是一个数组：[{ username, securityLevel, departmentId }]
+ * 这里简单包装成 { list } 方便前端使用。
+ */
+export async function apiAuthUsersQuery(): Promise<AuthUsersQueryResponse> {
+  const data = await request<AuthUserItem[]>('/auth/users/query', { method: 'GET' })
+  return { list: data || [] }
+}
+
+/**
+ * 将 AuthUserItem 映射为旧的 UserListItem 结构（仅供需要时使用）
+ */
+export function mapAuthUserToUserListItem(u: AuthUserItem, index: number): UserListItem {
+  return {
+    userId: index + 1, // 后端目前未提供 id，可用索引占位
+    username: u.username,
+    dept: String(u.departmentId),
+    role: (u.securityLevel === 0 ? 0 : 1) as UserRole,
+    frozen: false,
+  }
+}
