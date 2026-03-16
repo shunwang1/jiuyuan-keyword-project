@@ -3,6 +3,7 @@
 // - 上传
 // - 搜索
 // - 文件下载（原生 fetch 获取 blob + headers）
+// - 文件预览（原生 fetch 获取 pdf blob + headers）
 // - 上传页下拉 query/add/delete
 
 import { request, type BlobResponse, JWT_TOKEN_LS_KEY } from './http'
@@ -19,8 +20,8 @@ export type ReportCategory = number | string
 export interface UploadReportParams {
   file: File
   category: number
-  modelSpec: string
-  componentCategory: string
+  modelSpec?: string
+  componentCategory?: string
   manufacturerName?: string
   batchNumber?: string
 }
@@ -106,8 +107,9 @@ export function apiUploadReport(params: UploadReportParams) {
   const fd = new FormData()
   fd.append('file', params.file)
   fd.append('category', String(params.category))
-  fd.append('modelSpec', params.modelSpec)
-  fd.append('componentCategory', params.componentCategory)
+
+  if (params.modelSpec) fd.append('modelSpec', params.modelSpec)
+  if (params.componentCategory) fd.append('componentCategory', params.componentCategory)
   if (params.manufacturerName) fd.append('manufacturerName', params.manufacturerName)
   if (params.batchNumber) fd.append('batchNumber', params.batchNumber)
 
@@ -211,7 +213,7 @@ export async function apiReportPreviewBlob(id: number | string): Promise<BlobRes
 
 /**
  * 更新报告状态
- * PATCH /api/v1/reports/{id}/status?status=1001|1002|1003
+ * PATCH /api/v1/reports/{id}/status?status=整数
  */
 export function apiUpdateReportStatus(params: { id: number | string; status: number }) {
   const qs = new URLSearchParams({ status: String(params.status) }).toString()
@@ -219,7 +221,6 @@ export function apiUpdateReportStatus(params: { id: number | string; status: num
     method: 'PATCH',
   })
 }
-
 
 /**
  * 搜索报告
