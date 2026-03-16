@@ -22,7 +22,7 @@
       </el-form-item>
 
       <!-- 厂家（推荐第一步） -->
-      <el-form-item label="厂家">
+      <el-form-item label="厂家信息">
         <div class="row">
           <el-select
             v-model="form.manufacturerName"
@@ -59,7 +59,7 @@
       </el-form-item>
 
       <!-- 元器件门类（原本必填，这里只在界面提示，不在逻辑中强制） -->
-      <el-form-item label="门类">
+      <el-form-item label="元器件门类">
         <div class="row">
           <el-select
             v-model="form.componentCategory"

@@ -294,6 +294,7 @@ import {
   apiUpdateReportStatus,
   type ReportListItem,
   type SearchReportsResponseData,
+  type ReportStatusCode,
 } from '../api/reports'
 
 type CategoryRow = { id: number; category: string }
@@ -631,7 +632,11 @@ const downloadReport = async (row: ReportRow) => {
 // 更新状态相关
 const statusDialogVisible = ref(false)
 const statusUpdating = ref(false)
-const statusForm = reactive<{ reportId: number | null; currentStatus: number | null; newStatus: number | null }>({
+const statusForm = reactive<{
+  reportId: number | null
+  currentStatus: ReportStatusCode | null
+  newStatus: ReportStatusCode | null
+}>({
   reportId: null,
   currentStatus: null,
   newStatus: null,
@@ -640,8 +645,15 @@ const statusForm = reactive<{ reportId: number | null; currentStatus: number | n
 const openStatusDialog = (row: ReportRow) => {
   statusForm.reportId = row.reportId
   const current = typeof row.status === 'number' ? row.status : Number(row.status)
-  statusForm.currentStatus = Number.isFinite(current) ? current : null
-  statusForm.newStatus = statusForm.currentStatus
+
+  if (current === 1001 || current === 1002 || current === 1003) {
+    statusForm.currentStatus = current as ReportStatusCode
+    statusForm.newStatus = current as ReportStatusCode
+  } else {
+    statusForm.currentStatus = null
+    statusForm.newStatus = null
+  }
+
   statusDialogVisible.value = true
 }
 
@@ -651,12 +663,12 @@ const submitStatusUpdate = async () => {
 
   statusUpdating.value = true
   try {
-    await apiUpdateReportStatus({ id: statusForm.reportId, status: statusForm.newStatus as any })
+    await apiUpdateReportStatus({ id: statusForm.reportId, status: statusForm.newStatus })
     ElMessage.success('状态更新成功')
 
     const target = result.value.find((r) => r.reportId === statusForm.reportId)
     if (target) {
-      target.status = statusForm.newStatus as any
+      target.status = statusForm.newStatus
     }
 
     statusDialogVisible.value = false
