@@ -14,31 +14,6 @@ export interface UserListItem {
   // password?: string
 }
 
-// 下面这几个是分页旧接口用到的类型，已废弃，直接删掉：
-// export interface PageParams {
-//   pageNo: number
-//   pageSize: number
-// }
-// export interface UsersPageRequest {
-//   pageNo: number
-//   pageSize: number
-// }
-// export interface UsersPageResponseData {
-//   list: UserListItem[]
-//   total: number
-// }
-
-/**
- * 分页查询用户列表（旧接口，已废弃）
- * 你要求删除 page 接口，这里直接移除函数定义
- */
-// export function apiUsersPage({ pageNo, pageSize }: UsersPageRequest) {
-//   return request<UsersPageResponseData>('/users/page', {
-//     method: 'POST',
-//     body: { page: { pageNo, pageSize } as PageParams },
-//   })
-// }
-
 export interface CreateUserParams {
   username: string
   password: string
@@ -47,10 +22,11 @@ export interface CreateUserParams {
 }
 
 /**
- * 创建新用户（旧接口，保留不动）
+ * 创建新用户
+ * 新接口：POST /api/v1/auth/users/add
  */
 export function apiCreateUser({ username, password, dept, role }: CreateUserParams) {
-  return request<null>('/users/add', {
+  return request<null>('/auth/users/add', {
     method: 'POST',
     body: { username, password, dept, role },
   })
@@ -87,15 +63,14 @@ export function apiFreezeUser({ userId, frozen }: FreezeUserParams) {
 }
 
 /* ===========================
- * 新增：PATCH 接口适配（对接后端 JWT 文档）
- * 不影响旧 API，页面可按需切换调用
+ * PATCH 接口适配（对接后端 JWT 文档）
  * =========================== */
 
 export type UserStatusCode = 0 | 1 // 0 frozen/invalid, 1 valid
 
 /**
  * 新接口：修改用户状态（冻结/解冻）
- * 后端：PATCH /api/v1/auth/users/{id}/status?status=0|1
+ * PATCH /api/v1/auth/users/{id}/status?status=0|1
  */
 export function apiPatchUserStatus(params: { id: number; status: UserStatusCode }) {
   const qs = new URLSearchParams({ status: String(params.status) }).toString()
@@ -104,9 +79,7 @@ export function apiPatchUserStatus(params: { id: number; status: UserStatusCode 
 
 /**
  * 新接口：修改用户权限（securityLevel）
- * 后端：PATCH /api/v1/auth/users/{id}/security-level?securityLevel=0|1
- *
- * 注意：后端规则禁止 0->1，且不能改自己；前端只负责传参，失败由后端返回错误码与 msg
+ * PATCH /api/v1/auth/users/{id}/security-level?securityLevel=0|1
  */
 export function apiPatchUserSecurityLevel(params: { id: number; securityLevel: 0 | 1 }) {
   const qs = new URLSearchParams({ securityLevel: String(params.securityLevel) }).toString()
@@ -114,7 +87,7 @@ export function apiPatchUserSecurityLevel(params: { id: number; securityLevel: 0
 }
 
 /* ===========================
- * 新增：查询所有用户（对齐后端最新说明）
+ * 查询所有用户（对齐后端最新说明）
  * GET /api/v1/auth/users/query
  * =========================== */
 
@@ -129,11 +102,11 @@ export interface AuthUsersQueryResponse {
 }
 
 /**
- * 新接口：查询所有用户
- * 后端：GET /api/v1/auth/users/query
+ * 查询所有用户
+ * GET /api/v1/auth/users/query
  *
- * 返回 data 是一个数组：[{ username, securityLevel, departmentId }]
- * 这里简单包装成 { list } 方便前端使用。
+ * 返回 data 是数组：[{ username, securityLevel, departmentId }]
+ * 这里包装成 { list } 方便前端使用。
  */
 export async function apiAuthUsersQuery(): Promise<AuthUsersQueryResponse> {
   const data = await request<AuthUserItem[]>('/auth/users/query', { method: 'GET' })
@@ -141,7 +114,7 @@ export async function apiAuthUsersQuery(): Promise<AuthUsersQueryResponse> {
 }
 
 /**
- * 将 AuthUserItem 映射为旧的 UserListItem 结构（仅供需要时使用）
+ * 将 AuthUserItem 映射为旧的 UserListItem 结构（仅供页面复用）
  */
 export function mapAuthUserToUserListItem(u: AuthUserItem, index: number): UserListItem {
   return {
