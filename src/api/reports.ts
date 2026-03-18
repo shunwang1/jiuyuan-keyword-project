@@ -122,8 +122,6 @@ export function apiUploadReport(params: UploadReportParams) {
 /**
  * 下载报告文件（原生 fetch）
  * GET /api/v1/reports/file?id=1
- * 请求头：token
- * 返回：blob + headers + status
  */
 export async function apiReportFileBlob(id: number | string): Promise<BlobResponse> {
   const token = readToken()
@@ -168,8 +166,6 @@ export async function apiReportFileBlob(id: number | string): Promise<BlobRespon
 /**
  * 预览报告（获取 PDF blob）
  * GET /api/v1/reports/preview?id={reportId}
- * 请求头：token
- * 返回：PDF blob + headers + status
  */
 export async function apiReportPreviewBlob(id: number | string): Promise<BlobResponse> {
   const token = readToken()
@@ -212,6 +208,17 @@ export async function apiReportPreviewBlob(id: number | string): Promise<BlobRes
 }
 
 /**
+ * 查询报告关键词
+ * GET /api/v1/reports/{id}/keywords
+ * 返回 data: string[]
+ */
+export async function apiReportKeywords(id: number | string): Promise<string[]> {
+  return request<string[]>(`/reports/${encodeURIComponent(id)}/keywords`, {
+    method: 'GET',
+  })
+}
+
+/**
  * 更新报告状态
  * PATCH /api/v1/reports/{id}/status?status=整数
  */
@@ -224,9 +231,6 @@ export function apiUpdateReportStatus(params: { id: number | string; status: num
 
 /**
  * 搜索报告
- * 兼容当前联调：
- * - category 传数字ID
- * - 结果兼容 list/records/rows
  */
 export async function apiSearchReports({ filters, page }: SearchReportsParams): Promise<SearchReportsResponseData> {
   if (USE_MOCK_API) {

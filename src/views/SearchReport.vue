@@ -5,7 +5,6 @@
     </template>
 
     <el-form label-width="110px" style="max-width: 980px">
-      <!-- 报告类别：先选 -->
       <el-form-item label="报告类别" required>
         <el-select
           v-model="query.categoryId"
@@ -22,7 +21,6 @@
         </div>
       </el-form-item>
 
-      <!-- 厂家信息（推荐第一步） -->
       <el-form-item label="厂家信息">
         <el-select
           v-model="query.manufacturerName"
@@ -37,7 +35,6 @@
         </el-select>
       </el-form-item>
 
-      <!-- 元器件门类 -->
       <el-form-item label="元器件门类">
         <el-select
           v-model="query.componentCategory"
@@ -52,7 +49,6 @@
         </el-select>
       </el-form-item>
 
-      <!-- 型号规格 -->
       <el-form-item label="型号规格">
         <el-select
           v-model="query.modelSpec"
@@ -67,7 +63,6 @@
         </el-select>
       </el-form-item>
 
-      <!-- 批号 -->
       <el-form-item label="批号">
         <el-select
           v-model="query.batchNumber"
@@ -82,7 +77,6 @@
         </el-select>
       </el-form-item>
 
-      <!-- 关键词 -->
       <el-form-item label="关键词">
         <el-select
           v-model="query.keywords"
@@ -100,7 +94,6 @@
         </el-select>
       </el-form-item>
 
-      <!-- 操作按钮 -->
       <el-form-item>
         <el-button type="primary" :loading="loadingSearch" @click="doSearch(true)">检索</el-button>
         <el-button :disabled="loadingSearch" @click="resetForm">重置</el-button>
@@ -204,21 +197,22 @@
     <el-dialog
       v-model="previewVisible"
       title="报告预览"
-      width="80%"
-      top="5vh"
+      width="90%"
+      top="3vh"
       :destroy-on-close="true"
-      @closed="cleanupPreviewUrl"
+      @closed="cleanupPreview"
     >
-      <div style="height: 75vh">
-        <iframe v-if="previewUrl" :src="previewUrl" style="width: 100%; height: 100%; border: 0" />
+      <div style="height: 82vh; overflow: auto">
+        <PdfKeywordViewer
+          v-if="previewBlob"
+          :blob="previewBlob"
+          :keywords="previewKeywords"
+        />
         <div v-else style="color:#999">暂无可预览内容</div>
       </div>
 
       <template #footer>
         <el-button @click="previewVisible = false">关闭</el-button>
-        <el-button type="primary" :disabled="!previewUrl" @click="openPreviewInNewTab">
-          新窗口打开
-        </el-button>
       </template>
     </el-dialog>
 
@@ -226,16 +220,60 @@
     <el-dialog
       v-model="compareVisible"
       title="报告对比预览"
-      width="92%"
-      top="4vh"
+      width="96%"
+      top="2vh"
       :destroy-on-close="true"
-      @closed="cleanupCompareUrls"
+      @closed="cleanupCompare"
     >
-      <div class="compare" :style="{ gridTemplateColumns: `repeat(${compareItems.length || 1}, 1fr)` }">
-        <div v-for="it in compareItems" :key="it.reportId" class="compare__col">
+      <div v-if="compareAllKeywords.length" class="compare-sync-toolbar">
+        <div class="compare-sync-toolbar__left">
+          <span class="compare-sync-toolbar__label">同步高亮：</span>
+
+          <el-tag
+            size="small"
+            :type="compareActiveKeyword === '__ALL__' ? 'danger' : 'info'"
+            :effect="compareActiveKeyword === '__ALL__' ? 'dark' : 'plain'"
+            class="compare-sync-toolbar__tag"
+            @click="syncCompareKeyword('__ALL__')"
+          >
+            全部
+          </el-tag>
+
+          <el-tag
+            v-for="kw in compareAllKeywords"
+            :key="kw"
+            size="small"
+            :type="compareActiveKeyword === kw ? 'danger' : 'warning'"
+            :effect="compareActiveKeyword === kw ? 'dark' : 'plain'"
+            class="compare-sync-toolbar__tag"
+            @click="syncCompareKeyword(kw)"
+          >
+            {{ kw }}
+          </el-tag>
+        </div>
+
+        <div class="compare-sync-toolbar__right">
+          <el-button size="small" @click="syncComparePrev">同步上一个</el-button>
+          <el-button size="small" @click="syncCompareNext">同步下一个</el-button>
+        </div>
+      </div>
+
+      <div
+        class="compare"
+        :style="{ gridTemplateColumns: `repeat(${compareItems.length || 1}, 1fr)` }"
+      >
+        <div v-for="(it, index) in compareItems" :key="it.reportId" class="compare__col">
           <div class="compare__title" :title="it.fileName">{{ it.fileName }}</div>
           <div v-if="it.loading" style="padding: 10px; color:#999">加载中...</div>
-          <iframe v-else :src="it.url" class="compare__iframe" />
+          <div v-else class="compare__body">
+            <PdfKeywordViewer
+              v-if="it.blob"
+              :ref="(el) => setCompareViewerRef(el as PdfKeywordViewerExpose | null, index)"
+              :blob="it.blob"
+              :keywords="it.keywords"
+            />
+            <div v-else style="padding: 12px; color:#999">暂无可预览内容</div>
+          </div>
         </div>
       </div>
 
@@ -279,14 +317,16 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { request } from '../api/http'
 import { apiQueryKeywords } from '../api/keywords'
+import PdfKeywordViewer from '../components/PdfKeywordViewer.vue'
 import {
   apiSearchReports,
   apiReportFileBlob,
   apiReportPreviewBlob,
+  apiReportKeywords,
   apiQueryModelSpecs,
   apiQueryComponentCategories,
   apiQueryManufacturers,
@@ -306,43 +346,22 @@ type ReportRow = ReportListItem & {
   batchNumber?: string
 }
 
+type PdfKeywordViewerExpose = {
+  setActiveKeyword: (keyword: string) => void
+  goPrevHit: () => void
+  goNextHit: () => void
+}
+
+type CompareItem = {
+  reportId: number
+  fileName: string
+  blob: Blob | null
+  keywords: string[]
+  loading: boolean
+}
+
 const categories = ref<CategoryRow[]>([])
 const loadingCategories = ref(false)
-
-const categoryNameById = (v: unknown) => {
-  const n = typeof v === 'number' ? v : Number(v)
-  const hit = categories.value.find((x) => x.id === n)
-  return hit?.category ?? (v == null ? '' : String(v))
-}
-
-const statusLabel = (v: unknown) => {
-  const n = typeof v === 'number' ? v : Number(v)
-  if (n === 1001) return '待处理'
-  if (n === 1002) return '已通过'
-  if (n === 1003) return '已拒绝'
-  return v == null ? '' : String(v)
-}
-
-function normalizeRow(raw: any): ReportRow {
-  return {
-    reportId: Number(raw?.reportId ?? raw?.id ?? raw?.reportID ?? raw?.report_id),
-    fileName: String(raw?.fileName ?? raw?.filename ?? raw?.name ?? ''),
-    category: raw?.category ?? raw?.categoryId ?? '',
-    modelSpec: raw?.modelSpec ?? '',
-    deviceCategory: raw?.deviceCategory ?? raw?.componentCategory ?? '',
-    vendor: raw?.vendor ?? raw?.manufacturerName ?? raw?.manufacture ?? '',
-    batchNo: raw?.batchNo ?? raw?.batchNumber ?? '',
-    prodDate: raw?.prodDate,
-    address: raw?.address,
-    status: raw?.status,
-    createdAt: raw?.createdAt,
-
-    componentCategory: raw?.componentCategory,
-    manufacturerName: raw?.manufacturerName,
-    manufacture: raw?.manufacture,
-    batchNumber: raw?.batchNumber,
-  }
-}
 
 const query = reactive<{
   categoryId: number | null
@@ -381,8 +400,78 @@ const page = reactive({ pageNo: 1, pageSize: 15 })
 const total = ref(0)
 const result = ref<ReportRow[]>([])
 const loadingSearch = ref(false)
-
 const selectedRows = ref<ReportRow[]>([])
+
+const previewVisible = ref(false)
+const previewBlob = ref<Blob | null>(null)
+const previewKeywords = ref<string[]>([])
+const previewLoadingId = ref<number | null>(null)
+
+const openLoadingId = ref<number | null>(null)
+const downloadLoadingId = ref<number | null>(null)
+
+const compareVisible = ref(false)
+const compareItems = ref<CompareItem[]>([])
+const compareActiveKeyword = ref<string>('__ALL__')
+const compareViewerRefs = ref<PdfKeywordViewerExpose[]>([])
+
+const statusDialogVisible = ref(false)
+const statusUpdating = ref(false)
+const statusForm = reactive<{
+  reportId: number | null
+  currentStatus: ReportStatusCode | null
+  newStatus: ReportStatusCode | null
+}>({
+  reportId: null,
+  currentStatus: null,
+  newStatus: null,
+})
+
+const compareAllKeywords = computed(() => {
+  const set = new Set<string>()
+  for (const item of compareItems.value) {
+    for (const kw of item.keywords || []) {
+      const s = (kw || '').trim()
+      if (s) set.add(s)
+    }
+  }
+  return Array.from(set)
+})
+
+const categoryNameById = (v: unknown) => {
+  const n = typeof v === 'number' ? v : Number(v)
+  const hit = categories.value.find((x) => x.id === n)
+  return hit?.category ?? (v == null ? '' : String(v))
+}
+
+const statusLabel = (v: unknown) => {
+  const n = typeof v === 'number' ? v : Number(v)
+  if (n === 1001) return '待处理'
+  if (n === 1002) return '已通过'
+  if (n === 1003) return '已拒绝'
+  return v == null ? '' : String(v)
+}
+
+function normalizeRow(raw: any): ReportRow {
+  return {
+    reportId: Number(raw?.reportId ?? raw?.id ?? raw?.reportID ?? raw?.report_id),
+    fileName: String(raw?.fileName ?? raw?.filename ?? raw?.name ?? ''),
+    category: raw?.category ?? raw?.categoryId ?? '',
+    modelSpec: raw?.modelSpec ?? '',
+    deviceCategory: raw?.deviceCategory ?? raw?.componentCategory ?? '',
+    vendor: raw?.vendor ?? raw?.manufacturerName ?? raw?.manufacture ?? '',
+    batchNo: raw?.batchNo ?? raw?.batchNumber ?? '',
+    prodDate: raw?.prodDate,
+    address: raw?.address,
+    status: raw?.status,
+    createdAt: raw?.createdAt,
+
+    componentCategory: raw?.componentCategory,
+    manufacturerName: raw?.manufacturerName,
+    manufacture: raw?.manufacture,
+    batchNumber: raw?.batchNumber,
+  }
+}
 
 async function loadCategories() {
   loadingCategories.value = true
@@ -398,9 +487,7 @@ async function loadCategories() {
   }
 }
 
-onMounted(loadCategories)
-
-const onCategoryChange = async () => {
+async function loadDependents(categoryId: number) {
   query.keywords = []
   keywordOptions.value = []
 
@@ -414,19 +501,17 @@ const onCategoryChange = async () => {
   options.manufacturers = []
   options.batchNumbers = []
 
-  if (!query.categoryId) return
-
   loadingOptions.modelSpecs = true
   loadingOptions.componentCategories = true
   loadingOptions.manufacturers = true
   loadingOptions.batchNumbers = true
+
   try {
-    const cid = query.categoryId
     const [ms, cc, mf, bn] = await Promise.all([
-      apiQueryModelSpecs(cid),
-      apiQueryComponentCategories(cid),
-      apiQueryManufacturers(cid),
-      apiQueryBatchNumbers(cid),
+      apiQueryModelSpecs(categoryId),
+      apiQueryComponentCategories(categoryId),
+      apiQueryManufacturers(categoryId),
+      apiQueryBatchNumbers(categoryId),
     ])
     options.modelSpecs = ms
     options.componentCategories = cc
@@ -440,6 +525,94 @@ const onCategoryChange = async () => {
     loadingOptions.manufacturers = false
     loadingOptions.batchNumbers = false
   }
+}
+
+async function getDownloadResource(reportId: number | string) {
+  const res = await apiReportFileBlob(reportId)
+  const disposition =
+    res.headers.get('content-disposition') ||
+    res.headers.get('Content-Disposition') ||
+    ''
+
+  const fileName = parseDownloadFileName(disposition)
+  const blob = new Blob([res.blob])
+
+  return { blob, fileName }
+}
+
+async function getPreviewResource(reportId: number | string) {
+  const [pdfRes, keywords] = await Promise.all([
+    apiReportPreviewBlob(reportId),
+    apiReportKeywords(reportId),
+  ])
+
+  const pdfBlob = new Blob([pdfRes.blob], { type: 'application/pdf' })
+  return {
+    blob: pdfBlob,
+    keywords: keywords || [],
+  }
+}
+
+function cleanupPreview() {
+  previewBlob.value = null
+  previewKeywords.value = []
+}
+
+function cleanupCompare() {
+  compareItems.value = []
+  compareViewerRefs.value = []
+  compareActiveKeyword.value = '__ALL__'
+}
+
+function setCompareViewerRef(el: PdfKeywordViewerExpose | null, index: number) {
+  if (!el) return
+  compareViewerRefs.value[index] = el
+}
+
+function syncCompareKeyword(keyword: string) {
+  compareActiveKeyword.value = keyword
+  for (const viewer of compareViewerRefs.value) {
+    viewer?.setActiveKeyword(keyword)
+  }
+}
+
+function syncComparePrev() {
+  for (const viewer of compareViewerRefs.value) {
+    viewer?.goPrevHit()
+  }
+}
+
+function syncCompareNext() {
+  for (const viewer of compareViewerRefs.value) {
+    viewer?.goNextHit()
+  }
+}
+
+function parseDownloadFileName(disposition: string): string {
+  let fileName = 'download'
+
+  const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i)
+  if (utf8Match) {
+    try {
+      fileName = decodeURIComponent(utf8Match[1])
+    } catch {
+      fileName = utf8Match[1]
+    }
+  } else {
+    const normalMatch = disposition.match(/filename="?([^";]+)"?/i)
+    if (normalMatch) {
+      fileName = normalMatch[1]
+    }
+  }
+
+  return fileName
+}
+
+onMounted(loadCategories)
+
+const onCategoryChange = async () => {
+  if (!query.categoryId) return
+  await loadDependents(query.categoryId)
 }
 
 const onKeywordsVisibleChange = async (visible: boolean) => {
@@ -488,7 +661,6 @@ const doSearch = async (resetToFirstPage = false) => {
 
 const onPageChange = async (p: number) => {
   page.pageNo = p
-  await doSearch(false)
 }
 
 const resetForm = () => {
@@ -510,76 +682,21 @@ const resetForm = () => {
   page.pageNo = 1
   selectedRows.value = []
 
-  cleanupPreviewUrl()
-  cleanupCompareUrls()
+  cleanupPreview()
+  cleanupCompare()
 }
 
 const onSelectionChange = (rows: ReportRow[]) => {
   selectedRows.value = rows
 }
 
-function parseDownloadFileName(disposition: string): string {
-  let fileName = 'download'
-
-  const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i)
-  if (utf8Match) {
-    try {
-      fileName = decodeURIComponent(utf8Match[1])
-    } catch {
-      fileName = utf8Match[1]
-    }
-  } else {
-    const normalMatch = disposition.match(/filename="?([^";]+)"?/i)
-    if (normalMatch) {
-      fileName = normalMatch[1]
-    }
-  }
-
-  return fileName
-}
-
-async function getDownloadResource(reportId: number | string) {
-  const res = await apiReportFileBlob(reportId)
-  const disposition =
-    res.headers.get('content-disposition') ||
-    res.headers.get('Content-Disposition') ||
-    ''
-
-  const fileName = parseDownloadFileName(disposition)
-  const blob = new Blob([res.blob])
-
-  return { blob, fileName }
-}
-
-async function getPreviewUrlByReportId(reportId: number | string) {
-  const res = await apiReportPreviewBlob(reportId)
-  const pdfBlob = new Blob([res.blob], { type: 'application/pdf' })
-  return URL.createObjectURL(pdfBlob)
-}
-
-const previewVisible = ref(false)
-const previewUrl = ref('')
-const previewLoadingId = ref<number | null>(null)
-let previewUrlToRevoke: string | null = null
-
-const openLoadingId = ref<number | null>(null)
-const downloadLoadingId = ref<number | null>(null)
-
-function cleanupPreviewUrl() {
-  if (previewUrlToRevoke) {
-    URL.revokeObjectURL(previewUrlToRevoke)
-    previewUrlToRevoke = null
-  }
-  previewUrl.value = ''
-}
-
 const previewReport = async (row: ReportRow) => {
-  cleanupPreviewUrl()
+  cleanupPreview()
   previewLoadingId.value = row.reportId
   try {
-    const url = await getPreviewUrlByReportId(row.reportId)
-    previewUrl.value = url
-    previewUrlToRevoke = url
+    const res = await getPreviewResource(row.reportId)
+    previewBlob.value = res.blob
+    previewKeywords.value = res.keywords
     previewVisible.value = true
   } catch (e: unknown) {
     ElMessage.error(
@@ -590,17 +707,11 @@ const previewReport = async (row: ReportRow) => {
   }
 }
 
-const openPreviewInNewTab = () => {
-  if (!previewUrl.value) return
-  window.open(previewUrl.value, '_blank')
-}
-
 const openReport = async (row: ReportRow) => {
   openLoadingId.value = row.reportId
   try {
-    const url = await getPreviewUrlByReportId(row.reportId)
+    const url = `/report-preview/${row.reportId}`
     window.open(url, '_blank')
-    window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
   } catch (e: unknown) {
     ElMessage.error(
       e instanceof Error ? e.message : '打开失败（当前文件暂不可预览，请尝试下载原文件）',
@@ -628,19 +739,6 @@ const downloadReport = async (row: ReportRow) => {
     downloadLoadingId.value = null
   }
 }
-
-// 更新状态相关
-const statusDialogVisible = ref(false)
-const statusUpdating = ref(false)
-const statusForm = reactive<{
-  reportId: number | null
-  currentStatus: ReportStatusCode | null
-  newStatus: ReportStatusCode | null
-}>({
-  reportId: null,
-  currentStatus: null,
-  newStatus: null,
-})
 
 const openStatusDialog = (row: ReportRow) => {
   statusForm.reportId = row.reportId
@@ -679,44 +777,39 @@ const submitStatusUpdate = async () => {
   }
 }
 
-const compareVisible = ref(false)
-const compareItems = ref<Array<{ reportId: number; fileName: string; url: string; loading: boolean }>>([])
-const compareUrlsToRevoke = ref<string[]>([])
-
-function cleanupCompareUrls() {
-  for (const u of compareUrlsToRevoke.value) URL.revokeObjectURL(u)
-  compareUrlsToRevoke.value = []
-  compareItems.value = []
-}
-
 const openCompare = async () => {
   if (selectedRows.value.length < 2 || selectedRows.value.length > 3) {
     return ElMessage.warning('请选择 2 或 3 份报告进行对比')
   }
 
-  cleanupCompareUrls()
+  cleanupCompare()
   compareVisible.value = true
 
   compareItems.value = selectedRows.value.slice(0, 3).map((r) => ({
     reportId: r.reportId,
     fileName: r.fileName,
-    url: '',
+    blob: null,
+    keywords: [],
     loading: true,
   }))
 
   await Promise.all(
     compareItems.value.map(async (it) => {
       try {
-        const url = await getPreviewUrlByReportId(it.reportId)
-        it.url = url
+        const res = await getPreviewResource(it.reportId)
+        it.blob = res.blob
+        it.keywords = res.keywords
         it.loading = false
-        compareUrlsToRevoke.value.push(url)
       } catch {
-        it.url = ''
+        it.blob = null
+        it.keywords = []
         it.loading = false
       }
     }),
   )
+
+  compareViewerRefs.value = []
+  compareActiveKeyword.value = '__ALL__'
 }
 </script>
 
@@ -724,7 +817,7 @@ const openCompare = async () => {
 .compare {
   display: grid;
   gap: 12px;
-  height: 78vh;
+  height: 84vh;
 }
 
 .compare__col {
@@ -732,6 +825,7 @@ const openCompare = async () => {
   flex-direction: column;
   border: 1px solid #ebeef5;
   background: #fff;
+  overflow: hidden;
 }
 
 .compare__title {
@@ -744,10 +838,42 @@ const openCompare = async () => {
   text-overflow: ellipsis;
 }
 
-.compare__iframe {
-  width: 100%;
-  height: 100%;
-  border: 0;
+.compare__body {
   flex: 1;
+  overflow: auto;
+  padding: 8px;
+}
+
+.compare-sync-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 8px 4px;
+  border-bottom: 1px solid #ebeef5;
+}
+
+.compare-sync-toolbar__left {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.compare-sync-toolbar__right {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.compare-sync-toolbar__label {
+  color: #666;
+  font-size: 13px;
+}
+
+.compare-sync-toolbar__tag {
+  cursor: pointer;
+  user-select: none;
 }
 </style>
