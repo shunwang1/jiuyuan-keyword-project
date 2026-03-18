@@ -316,14 +316,14 @@ defineExpose({
 }
 
 :deep(.pdf-hl) {
-  background: rgba(255, 235, 59, 0.72);
+  background: rgba(255, 235, 59, 0.28);
   color: transparent;
   border-radius: 2px;
-  padding: 0 1px;
+  padding: 0;
 }
 
 :deep(.pdf-hl--active) {
-  background: rgba(255, 87, 34, 0.82) !important;
-  box-shadow: 0 0 0 2px rgba(255, 87, 34, 0.28);
+  background: rgba(255, 152, 0, 0.35) !important;
+  box-shadow: 0 0 0 1px rgba(255, 152, 0, 0.35);
 }
 </style>
