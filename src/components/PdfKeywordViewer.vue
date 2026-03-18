@@ -315,15 +315,29 @@ defineExpose({
   white-space: pre;
 }
 
+/* 底部荧光条：只标记文字下半部分，不遮住字形 */
 :deep(.pdf-hl) {
-  background: rgba(255, 235, 59, 0.28);
+  background: linear-gradient(
+    to top,
+    rgba(255, 235, 59, 0.38) 0%,
+    rgba(255, 235, 59, 0.38) 32%,
+    transparent 32%,
+    transparent 100%
+  );
   color: transparent;
-  border-radius: 2px;
+  border-radius: 0;
   padding: 0;
 }
 
+/* 当前命中：稍微明显一点，但仍不整块盖字 */
 :deep(.pdf-hl--active) {
-  background: rgba(255, 152, 0, 0.35) !important;
-  box-shadow: 0 0 0 1px rgba(255, 152, 0, 0.35);
+  background: linear-gradient(
+    to top,
+    rgba(255, 152, 0, 0.52) 0%,
+    rgba(255, 152, 0, 0.52) 38%,
+    transparent 38%,
+    transparent 100%
+  ) !important;
+  box-shadow: none;
 }
 </style>
