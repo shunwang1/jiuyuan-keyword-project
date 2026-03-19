@@ -1,9 +1,10 @@
 // src/api/reports.ts
-// 报告管理相关API接口（按当前前后端联调需求整理）
+// 报告管理相关API接口
 // - 上传
 // - 搜索
 // - 文件下载（原生 fetch 获取 blob + headers）
 // - 文件预览（原生 fetch 获取 pdf blob + headers）
+// - 报告状态更新
 // - 上传页下拉 query/add/delete
 
 import { request, type BlobResponse, JWT_TOKEN_LS_KEY } from './http'
@@ -24,12 +25,6 @@ export interface UploadReportParams {
   componentCategory?: string
   manufacturerName?: string
   batchNumber?: string
-}
-
-export interface ApproveReportParams {
-  reportId: number | string
-  approved: boolean
-  comment?: string
 }
 
 export interface ReportListItem {
@@ -75,26 +70,6 @@ export interface SearchReportsResponseData {
   total: number
 }
 
-export interface ReportDetailResponseData {
-  report: {
-    reportId: number
-    fileName: string
-    category: ReportCategory
-
-    modelSpec?: string
-    deviceCategory?: string
-    vendor?: string
-    batchNo?: string
-
-    prodDate?: string
-    address?: string
-
-    status: ReportStatus
-    keywords?: string[]
-    createdAt?: string
-  }
-}
-
 function readToken(): string | null {
   try {
     return localStorage.getItem(JWT_TOKEN_LS_KEY)
@@ -103,6 +78,10 @@ function readToken(): string | null {
   }
 }
 
+/**
+ * 上传报告
+ * POST /api/v1/reports/upload
+ */
 export function apiUploadReport(params: UploadReportParams) {
   const fd = new FormData()
   fd.append('file', params.file)
@@ -121,7 +100,7 @@ export function apiUploadReport(params: UploadReportParams) {
 
 /**
  * 下载报告文件（原生 fetch）
- * GET /api/v1/reports/file?id=1
+ * GET /api/v1/reports/file?id={id}
  */
 export async function apiReportFileBlob(id: number | string): Promise<BlobResponse> {
   const token = readToken()
@@ -167,8 +146,7 @@ export async function apiReportFileBlob(id: number | string): Promise<BlobRespon
  * 预览报告（获取 PDF blob）
  * GET /api/v1/reports/preview?id={reportId}
  *
- * 这里会严格检查 content-type 必须是 application/pdf，
- * 否则视为“不可预览”，抛错给页面提示。
+ * content-type 必须是 application/pdf，否则视为不可预览
  */
 export async function apiReportPreviewBlob(id: number | string): Promise<BlobResponse> {
   const token = readToken()
@@ -202,7 +180,6 @@ export async function apiReportPreviewBlob(id: number | string): Promise<BlobRes
     throw new Error(message)
   }
 
-  // 成功但不是 PDF，也视为不可预览
   if (!contentType.toLowerCase().includes('application/pdf')) {
     let message = '当前文件暂不可预览，请下载原文件'
 
@@ -231,19 +208,8 @@ export async function apiReportPreviewBlob(id: number | string): Promise<BlobRes
 }
 
 /**
- * 查询报告关键词
- * GET /api/v1/reports/{id}/keywords
- * 返回 data: string[]
- */
-export async function apiReportKeywords(id: number | string): Promise<string[]> {
-  return request<string[]>(`/reports/${encodeURIComponent(id)}/keywords`, {
-    method: 'GET',
-  })
-}
-
-/**
  * 更新报告状态
- * PATCH /api/v1/reports/{id}/status?status=整数
+ * PATCH /api/v1/reports/{id}/status?status=1001|1002|1003
  */
 export function apiUpdateReportStatus(params: { id: number | string; status: number }) {
   const qs = new URLSearchParams({ status: String(params.status) }).toString()
@@ -254,6 +220,8 @@ export function apiUpdateReportStatus(params: { id: number | string; status: num
 
 /**
  * 搜索报告
+ * category 传数字ID
+ * 返回兼容 list / records / rows
  */
 export async function apiSearchReports({ filters, page }: SearchReportsParams): Promise<SearchReportsResponseData> {
   if (USE_MOCK_API) {

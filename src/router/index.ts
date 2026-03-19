@@ -15,7 +15,7 @@ const router = createRouter({
   routes: [
     { path: '/login', name: 'login', component: Login },
 
-    // 新增：独立预览窗口页
+    // 独立预览窗口页
     { path: '/report-preview/:id', name: 'reportPreviewWindow', component: ReportPreviewWindow },
 
     {
@@ -45,12 +45,10 @@ router.beforeEach(async (to) => {
     }
   }
 
-  // 未登录访问受保护页面 => 去登录
   if (to.path !== '/login' && !auth.isAuthed) {
     return { path: '/login' }
   }
 
-  // 已登录访问登录页 => 回首页
   if (to.path === '/login' && auth.isAuthed) {
     return { path: '/' }
   }

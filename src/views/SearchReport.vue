@@ -202,11 +202,11 @@
       :destroy-on-close="true"
       @closed="cleanupPreview"
     >
-      <div style="height: 82vh; overflow: auto">
-        <PdfKeywordViewer
-          v-if="previewBlob"
-          :blob="previewBlob"
-          :keywords="previewKeywords"
+      <div style="height: 82vh">
+        <iframe
+          v-if="previewUrl"
+          :src="previewUrl"
+          style="width: 100%; height: 100%; border: 0"
         />
         <div v-else style="color:#999">暂无可预览内容</div>
       </div>
@@ -225,55 +225,19 @@
       :destroy-on-close="true"
       @closed="cleanupCompare"
     >
-      <div v-if="compareAllKeywords.length" class="compare-sync-toolbar">
-        <div class="compare-sync-toolbar__left">
-          <span class="compare-sync-toolbar__label">同步高亮：</span>
-
-          <el-tag
-            size="small"
-            :type="compareActiveKeyword === '__ALL__' ? 'danger' : 'info'"
-            :effect="compareActiveKeyword === '__ALL__' ? 'dark' : 'plain'"
-            class="compare-sync-toolbar__tag"
-            @click="syncCompareKeyword('__ALL__')"
-          >
-            全部
-          </el-tag>
-
-          <el-tag
-            v-for="kw in compareAllKeywords"
-            :key="kw"
-            size="small"
-            :type="compareActiveKeyword === kw ? 'danger' : 'warning'"
-            :effect="compareActiveKeyword === kw ? 'dark' : 'plain'"
-            class="compare-sync-toolbar__tag"
-            @click="syncCompareKeyword(kw)"
-          >
-            {{ kw }}
-          </el-tag>
-        </div>
-
-        <div class="compare-sync-toolbar__right">
-          <el-button size="small" @click="syncComparePrev">同步上一个</el-button>
-          <el-button size="small" @click="syncCompareNext">同步下一个</el-button>
-        </div>
-      </div>
-
       <div
         class="compare"
         :style="{ gridTemplateColumns: `repeat(${compareItems.length || 1}, 1fr)` }"
       >
-        <div v-for="(it, index) in compareItems" :key="it.reportId" class="compare__col">
+        <div v-for="it in compareItems" :key="it.reportId" class="compare__col">
           <div class="compare__title" :title="it.fileName">{{ it.fileName }}</div>
           <div v-if="it.loading" style="padding: 10px; color:#999">加载中...</div>
-          <div v-else class="compare__body">
-            <PdfKeywordViewer
-              v-if="it.blob"
-              :ref="(el) => setCompareViewerRef(el as PdfKeywordViewerExpose | null, index)"
-              :blob="it.blob"
-              :keywords="it.keywords"
-            />
-            <div v-else style="padding: 12px; color:#999">暂无可预览内容</div>
-          </div>
+          <iframe
+            v-else-if="it.url"
+            :src="it.url"
+            class="compare__iframe"
+          />
+          <div v-else style="padding: 12px; color:#999">暂无可预览内容</div>
         </div>
       </div>
 
@@ -317,16 +281,14 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { request } from '../api/http'
 import { apiQueryKeywords } from '../api/keywords'
-import PdfKeywordViewer from '../components/PdfKeywordViewer.vue'
 import {
   apiSearchReports,
   apiReportFileBlob,
   apiReportPreviewBlob,
-  apiReportKeywords,
   apiQueryModelSpecs,
   apiQueryComponentCategories,
   apiQueryManufacturers,
@@ -346,17 +308,10 @@ type ReportRow = ReportListItem & {
   batchNumber?: string
 }
 
-type PdfKeywordViewerExpose = {
-  setActiveKeyword: (keyword: string) => void
-  goPrevHit: () => void
-  goNextHit: () => void
-}
-
 type CompareItem = {
   reportId: number
   fileName: string
-  blob: Blob | null
-  keywords: string[]
+  url: string
   loading: boolean
 }
 
@@ -403,8 +358,8 @@ const loadingSearch = ref(false)
 const selectedRows = ref<ReportRow[]>([])
 
 const previewVisible = ref(false)
-const previewBlob = ref<Blob | null>(null)
-const previewKeywords = ref<string[]>([])
+const previewUrl = ref('')
+let previewUrlToRevoke: string | null = null
 const previewLoadingId = ref<number | null>(null)
 
 const openLoadingId = ref<number | null>(null)
@@ -412,8 +367,7 @@ const downloadLoadingId = ref<number | null>(null)
 
 const compareVisible = ref(false)
 const compareItems = ref<CompareItem[]>([])
-const compareActiveKeyword = ref<string>('__ALL__')
-const compareViewerRefs = ref<PdfKeywordViewerExpose[]>([])
+const compareUrlsToRevoke = ref<string[]>([])
 
 const statusDialogVisible = ref(false)
 const statusUpdating = ref(false)
@@ -425,17 +379,6 @@ const statusForm = reactive<{
   reportId: null,
   currentStatus: null,
   newStatus: null,
-})
-
-const compareAllKeywords = computed(() => {
-  const set = new Set<string>()
-  for (const item of compareItems.value) {
-    for (const kw of item.keywords || []) {
-      const s = (kw || '').trim()
-      if (s) set.add(s)
-    }
-  }
-  return Array.from(set)
 })
 
 const categoryNameById = (v: unknown) => {
@@ -471,6 +414,26 @@ function normalizeRow(raw: any): ReportRow {
     manufacture: raw?.manufacture,
     batchNumber: raw?.batchNumber,
   }
+}
+
+function parseDownloadFileName(disposition: string): string {
+  let fileName = 'download'
+
+  const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i)
+  if (utf8Match) {
+    try {
+      fileName = decodeURIComponent(utf8Match[1])
+    } catch {
+      fileName = utf8Match[1]
+    }
+  } else {
+    const normalMatch = disposition.match(/filename="?([^";]+)"?/i)
+    if (normalMatch) {
+      fileName = normalMatch[1]
+    }
+  }
+
+  return fileName
 }
 
 async function loadCategories() {
@@ -540,72 +503,26 @@ async function getDownloadResource(reportId: number | string) {
   return { blob, fileName }
 }
 
-async function getPreviewResource(reportId: number | string) {
-  const [pdfRes, keywords] = await Promise.all([
-    apiReportPreviewBlob(reportId),
-    apiReportKeywords(reportId),
-  ])
-
-  const pdfBlob = new Blob([pdfRes.blob], { type: 'application/pdf' })
-  return {
-    blob: pdfBlob,
-    keywords: keywords || [],
-  }
+async function getPreviewUrlByReportId(reportId: number | string) {
+  const res = await apiReportPreviewBlob(reportId)
+  const pdfBlob = new Blob([res.blob], { type: 'application/pdf' })
+  return URL.createObjectURL(pdfBlob)
 }
 
 function cleanupPreview() {
-  previewBlob.value = null
-  previewKeywords.value = []
+  if (previewUrlToRevoke) {
+    URL.revokeObjectURL(previewUrlToRevoke)
+    previewUrlToRevoke = null
+  }
+  previewUrl.value = ''
 }
 
 function cleanupCompare() {
+  for (const u of compareUrlsToRevoke.value) {
+    URL.revokeObjectURL(u)
+  }
+  compareUrlsToRevoke.value = []
   compareItems.value = []
-  compareViewerRefs.value = []
-  compareActiveKeyword.value = '__ALL__'
-}
-
-function setCompareViewerRef(el: PdfKeywordViewerExpose | null, index: number) {
-  if (!el) return
-  compareViewerRefs.value[index] = el
-}
-
-function syncCompareKeyword(keyword: string) {
-  compareActiveKeyword.value = keyword
-  for (const viewer of compareViewerRefs.value) {
-    viewer?.setActiveKeyword(keyword)
-  }
-}
-
-function syncComparePrev() {
-  for (const viewer of compareViewerRefs.value) {
-    viewer?.goPrevHit()
-  }
-}
-
-function syncCompareNext() {
-  for (const viewer of compareViewerRefs.value) {
-    viewer?.goNextHit()
-  }
-}
-
-function parseDownloadFileName(disposition: string): string {
-  let fileName = 'download'
-
-  const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i)
-  if (utf8Match) {
-    try {
-      fileName = decodeURIComponent(utf8Match[1])
-    } catch {
-      fileName = utf8Match[1]
-    }
-  } else {
-    const normalMatch = disposition.match(/filename="?([^";]+)"?/i)
-    if (normalMatch) {
-      fileName = normalMatch[1]
-    }
-  }
-
-  return fileName
 }
 
 onMounted(loadCategories)
@@ -694,9 +611,9 @@ const previewReport = async (row: ReportRow) => {
   cleanupPreview()
   previewLoadingId.value = row.reportId
   try {
-    const res = await getPreviewResource(row.reportId)
-    previewBlob.value = res.blob
-    previewKeywords.value = res.keywords
+    const url = await getPreviewUrlByReportId(row.reportId)
+    previewUrl.value = url
+    previewUrlToRevoke = url
     previewVisible.value = true
   } catch (e: unknown) {
     ElMessage.error(
@@ -788,28 +705,23 @@ const openCompare = async () => {
   compareItems.value = selectedRows.value.slice(0, 3).map((r) => ({
     reportId: r.reportId,
     fileName: r.fileName,
-    blob: null,
-    keywords: [],
+    url: '',
     loading: true,
   }))
 
   await Promise.all(
     compareItems.value.map(async (it) => {
       try {
-        const res = await getPreviewResource(it.reportId)
-        it.blob = res.blob
-        it.keywords = res.keywords
+        const url = await getPreviewUrlByReportId(it.reportId)
+        it.url = url
         it.loading = false
+        compareUrlsToRevoke.value.push(url)
       } catch {
-        it.blob = null
-        it.keywords = []
+        it.url = ''
         it.loading = false
       }
     }),
   )
-
-  compareViewerRefs.value = []
-  compareActiveKeyword.value = '__ALL__'
 }
 </script>
 
@@ -838,42 +750,10 @@ const openCompare = async () => {
   text-overflow: ellipsis;
 }
 
-.compare__body {
+.compare__iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
   flex: 1;
-  overflow: auto;
-  padding: 8px;
-}
-
-.compare-sync-toolbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
-  padding: 8px 4px;
-  border-bottom: 1px solid #ebeef5;
-}
-
-.compare-sync-toolbar__left {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-}
-
-.compare-sync-toolbar__right {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
-.compare-sync-toolbar__label {
-  color: #666;
-  font-size: 13px;
-}
-
-.compare-sync-toolbar__tag {
-  cursor: pointer;
-  user-select: none;
 }
 </style>

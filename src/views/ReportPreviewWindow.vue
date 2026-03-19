@@ -1,17 +1,17 @@
 <template>
   <div class="page">
     <div class="toolbar">
-      <div class="title">报告高亮预览</div>
+      <div class="title">报告预览</div>
       <div class="actions">
         <el-button size="small" @click="reload">刷新</el-button>
       </div>
     </div>
 
     <div class="content" v-loading="loading">
-      <PdfKeywordViewer
-        v-if="pdfBlob"
-        :blob="pdfBlob"
-        :keywords="keywords"
+      <iframe
+        v-if="previewUrl"
+        :src="previewUrl"
+        style="width: 100%; height: 100%; border: 0"
       />
       <el-empty v-else description="暂无可预览内容" />
     </div>
@@ -19,21 +19,28 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import PdfKeywordViewer from '../components/PdfKeywordViewer.vue'
-import { apiReportPreviewBlob, apiReportKeywords } from '../api/reports'
+import { apiReportPreviewBlob } from '../api/reports'
 
 const route = useRoute()
 
 const loading = ref(false)
-const pdfBlob = ref<Blob | null>(null)
-const keywords = ref<string[]>([])
+const previewUrl = ref('')
+let previewUrlToRevoke: string | null = null
 
 function getReportId(): number | null {
   const id = Number(route.params.id)
   return Number.isFinite(id) ? id : null
+}
+
+function cleanup() {
+  if (previewUrlToRevoke) {
+    URL.revokeObjectURL(previewUrlToRevoke)
+    previewUrlToRevoke = null
+  }
+  previewUrl.value = ''
 }
 
 const loadData = async () => {
@@ -45,13 +52,12 @@ const loadData = async () => {
 
   loading.value = true
   try {
-    const [pdfRes, kws] = await Promise.all([
-      apiReportPreviewBlob(reportId),
-      apiReportKeywords(reportId),
-    ])
-
-    pdfBlob.value = new Blob([pdfRes.blob], { type: 'application/pdf' })
-    keywords.value = kws || []
+    cleanup()
+    const res = await apiReportPreviewBlob(reportId)
+    const pdfBlob = new Blob([res.blob], { type: 'application/pdf' })
+    const url = URL.createObjectURL(pdfBlob)
+    previewUrl.value = url
+    previewUrlToRevoke = url
   } catch (e: unknown) {
     ElMessage.error(
       e instanceof Error ? e.message : '当前文件暂不可预览，请返回上一页后尝试下载原文件',
@@ -66,6 +72,7 @@ const reload = async () => {
 }
 
 onMounted(loadData)
+onBeforeUnmount(cleanup)
 </script>
 
 <style scoped>
@@ -92,6 +99,7 @@ onMounted(loadData)
 }
 
 .content {
-  padding: 16px;
+  height: calc(100vh - 58px);
+  padding: 0;
 }
 </style>
