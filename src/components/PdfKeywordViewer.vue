@@ -315,29 +315,33 @@ defineExpose({
   white-space: pre;
 }
 
-/* 底部荧光条：只标记文字下半部分，不遮住字形 */
+/* 普通命中：关键词可见 + 底部荧光条 */
 :deep(.pdf-hl) {
   background: linear-gradient(
     to top,
-    rgba(255, 235, 59, 0.38) 0%,
-    rgba(255, 235, 59, 0.38) 32%,
+    rgba(255, 235, 59, 0.34) 0%,
+    rgba(255, 235, 59, 0.34) 32%,
     transparent 32%,
     transparent 100%
   );
-  color: transparent;
-  border-radius: 0;
+  color: #111;
+  border-radius: 2px;
   padding: 0;
+  font-weight: 500;
 }
 
-/* 当前命中：稍微明显一点，但仍不整块盖字 */
+/* 当前命中：更明显一点，但依然不整块盖字 */
 :deep(.pdf-hl--active) {
   background: linear-gradient(
     to top,
-    rgba(255, 152, 0, 0.52) 0%,
-    rgba(255, 152, 0, 0.52) 38%,
+    rgba(255, 152, 0, 0.45) 0%,
+    rgba(255, 152, 0, 0.45) 38%,
     transparent 38%,
     transparent 100%
   ) !important;
+  color: #111 !important;
+  border-radius: 2px;
   box-shadow: none;
+  font-weight: 600;
 }
 </style>
