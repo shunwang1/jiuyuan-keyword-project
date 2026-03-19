@@ -3,8 +3,8 @@
  * true  => 不依赖后端，会话/登录走前端mock，允许直接看界面
  * false => 严格走后端cookie会话（后端完成后改回false）
  */
-export const USE_MOCK_AUTH = true
-export const USE_MOCK_API = true
+export const USE_MOCK_AUTH = false
+export const USE_MOCK_API = false
 
 export interface MockUser {
   id: number

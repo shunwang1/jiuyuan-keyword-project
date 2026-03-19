@@ -166,6 +166,9 @@ export async function apiReportFileBlob(id: number | string): Promise<BlobRespon
 /**
  * 预览报告（获取 PDF blob）
  * GET /api/v1/reports/preview?id={reportId}
+ *
+ * 这里会严格检查 content-type 必须是 application/pdf，
+ * 否则视为“不可预览”，抛错给页面提示。
  */
 export async function apiReportPreviewBlob(id: number | string): Promise<BlobResponse> {
   const token = readToken()
@@ -179,17 +182,37 @@ export async function apiReportPreviewBlob(id: number | string): Promise<BlobRes
     headers,
   })
 
+  const contentType = resp.headers.get('content-type') || ''
+
   if (!resp.ok) {
     let message = `HTTP ${resp.status}`
 
     try {
-      const ct = resp.headers.get('content-type') || ''
-      if (ct.includes('application/json')) {
+      if (contentType.includes('application/json')) {
         const payload = await resp.json()
         message = payload?.msg || message
       } else {
         const text = await resp.text()
         if (text) message = text
+      }
+    } catch {
+      // ignore
+    }
+
+    throw new Error(message)
+  }
+
+  // 成功但不是 PDF，也视为不可预览
+  if (!contentType.toLowerCase().includes('application/pdf')) {
+    let message = '当前文件暂不可预览，请下载原文件'
+
+    try {
+      if (contentType.includes('application/json')) {
+        const payload = await resp.json()
+        message = payload?.msg || message
+      } else {
+        const text = await resp.text()
+        if (text && text.trim()) message = text
       }
     } catch {
       // ignore

@@ -46,7 +46,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import * as pdfjsLib from 'pdfjs-dist'
-import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
+import workerUrl from 'pdfjs-dist/build/pdf.worker.min.js?url'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl
 
@@ -60,7 +60,13 @@ const containerRef = ref<HTMLDivElement | null>(null)
 const ALL_KEY = '__ALL__'
 const activeKeyword = ref<string>(ALL_KEY)
 
-const hitElements = ref<HTMLElement[]>([])
+type HitBox = {
+  el: HTMLDivElement
+  page: number
+  keyword: string
+}
+
+const hitBoxes = ref<HitBox[]>([])
 const hitCount = ref(0)
 const currentHitIndex = ref(0)
 
@@ -80,47 +86,43 @@ function getWorkingKeywords() {
   return activeKeyword.value ? [activeKeyword.value] : []
 }
 
-function highlightText(text: string) {
-  const workingKeywords = getWorkingKeywords()
-  if (!workingKeywords.length) return text
-
-  const reg = new RegExp(`(${workingKeywords.map(escapeRegExp).join('|')})`, 'gi')
-  return text.replace(reg, '<mark class="pdf-hl">$1</mark>')
-}
-
 function clearHitState() {
-  hitElements.value.forEach((el) => el.classList.remove('pdf-hl--active'))
+  hitBoxes.value.forEach((hit) => hit.el.classList.remove('hl-box--active'))
 }
 
 function applyCurrentHitState() {
   clearHitState()
 
-  if (!hitElements.value.length) return
+  if (!hitBoxes.value.length) return
   const idx = currentHitIndex.value
-  const target = hitElements.value[idx]
+  const target = hitBoxes.value[idx]
   if (!target) return
 
-  target.classList.add('pdf-hl--active')
-  target.scrollIntoView({
+  target.el.classList.add('hl-box--active')
+  target.el.scrollIntoView({
     behavior: 'smooth',
     block: 'center',
     inline: 'nearest',
   })
 }
 
-function collectHitElements() {
+function collectHitsFromDom() {
   if (!containerRef.value) {
-    hitElements.value = []
+    hitBoxes.value = []
     hitCount.value = 0
     currentHitIndex.value = 0
     return
   }
 
   const found = Array.from(
-    containerRef.value.querySelectorAll<HTMLElement>('mark.pdf-hl'),
-  )
+    containerRef.value.querySelectorAll<HTMLDivElement>('.hl-box'),
+  ).map((el) => ({
+    el,
+    page: Number(el.dataset.page || 0),
+    keyword: String(el.dataset.keyword || ''),
+  }))
 
-  hitElements.value = found
+  hitBoxes.value = found
   hitCount.value = found.length
   currentHitIndex.value = 0
 
@@ -130,15 +132,15 @@ function collectHitElements() {
 }
 
 function goPrevHit() {
-  if (!hitElements.value.length) return
+  if (!hitBoxes.value.length) return
   currentHitIndex.value =
-    (currentHitIndex.value - 1 + hitElements.value.length) % hitElements.value.length
+    (currentHitIndex.value - 1 + hitBoxes.value.length) % hitBoxes.value.length
   applyCurrentHitState()
 }
 
 function goNextHit() {
-  if (!hitElements.value.length) return
-  currentHitIndex.value = (currentHitIndex.value + 1) % hitElements.value.length
+  if (!hitBoxes.value.length) return
+  currentHitIndex.value = (currentHitIndex.value + 1) % hitBoxes.value.length
   applyCurrentHitState()
 }
 
@@ -147,15 +149,28 @@ function setActiveKeyword(keyword: string) {
   activeKeyword.value = keyword
 }
 
+function findMatchedKeyword(text: string, keywords: string[]): string | null {
+  const source = String(text || '')
+  if (!source) return null
+
+  for (const kw of keywords) {
+    if (!kw) continue
+    const reg = new RegExp(escapeRegExp(kw), 'i')
+    if (reg.test(source)) return kw
+  }
+  return null
+}
+
 async function renderPdf() {
   if (!props.blob || !containerRef.value) return
 
   const container = containerRef.value
   container.innerHTML = ''
-  hitElements.value = []
+  hitBoxes.value = []
   hitCount.value = 0
   currentHitIndex.value = 0
 
+  const workingKeywords = getWorkingKeywords()
   const arrayBuffer = await props.blob.arrayBuffer()
   const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer })
   const pdf = await loadingTask.promise
@@ -177,45 +192,53 @@ async function renderPdf() {
     canvas.className = 'page-canvas'
 
     await page.render({
-      canvas,
       canvasContext: context,
       viewport,
     }).promise
 
-    const textLayer = document.createElement('div')
-    textLayer.className = 'text-layer'
-    textLayer.style.width = `${viewport.width}px`
-    textLayer.style.height = `${viewport.height}px`
+    const overlay = document.createElement('div')
+    overlay.className = 'highlight-layer'
+    overlay.style.width = `${viewport.width}px`
+    overlay.style.height = `${viewport.height}px`
 
     const textContent = await page.getTextContent()
 
-    for (const item of textContent.items) {
-      if (!('str' in item)) continue
+    if (workingKeywords.length) {
+      for (const item of textContent.items) {
+        if (!('str' in item)) continue
 
-      const span = document.createElement('span')
-      span.className = 'text-item'
+        const text = String(item.str || '').trim()
+        if (!text) continue
 
-      const transform = pdfjsLib.Util.transform(viewport.transform, item.transform)
-      const x = transform[4]
-      const y = transform[5]
-      const fontHeight = Math.hypot(transform[2], transform[3])
+        const matchedKeyword = findMatchedKeyword(text, workingKeywords)
+        if (!matchedKeyword) continue
 
-      span.style.left = `${x}px`
-      span.style.top = `${viewport.height - y}px`
-      span.style.fontSize = `${fontHeight}px`
-      span.style.transform = 'translateY(-100%)'
-      span.style.transformOrigin = 'left top'
-      span.innerHTML = highlightText(item.str)
+        const transform = pdfjsLib.Util.transform(viewport.transform, item.transform)
+        const x = transform[4]
+        const y = transform[5]
+        const fontHeight = Math.hypot(transform[2], transform[3])
+        const width = Math.max(item.width * viewport.scale, 12)
+        const height = Math.max(fontHeight, 10)
 
-      textLayer.appendChild(span)
+        const box = document.createElement('div')
+        box.className = 'hl-box'
+        box.dataset.page = String(pageNum)
+        box.dataset.keyword = matchedKeyword
+        box.style.left = `${x}px`
+        box.style.top = `${viewport.height - y - height}px`
+        box.style.width = `${width}px`
+        box.style.height = `${height}px`
+
+        overlay.appendChild(box)
+      }
     }
 
     pageWrap.appendChild(canvas)
-    pageWrap.appendChild(textLayer)
+    pageWrap.appendChild(overlay)
     container.appendChild(pageWrap)
   }
 
-  collectHitElements()
+  collectHitsFromDom()
 }
 
 watch(
@@ -247,9 +270,16 @@ defineExpose({
 <style scoped>
 .viewer {
   width: 100%;
+  position: relative;
 }
 
 .toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: #fff;
+  padding: 10px 0 12px;
+  border-bottom: 1px solid #ebeef5;
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
@@ -303,45 +333,20 @@ defineExpose({
   display: block;
 }
 
-.text-layer {
+.highlight-layer {
   position: absolute;
   inset: 0;
   pointer-events: none;
 }
 
-.text-item {
+.hl-box {
   position: absolute;
-  color: transparent;
-  white-space: pre;
+  background: rgba(255, 235, 59, 0.28);
+  border-radius: 2px;
 }
 
-/* 普通命中：关键词可见 + 底部荧光条 */
-:deep(.pdf-hl) {
-  background: linear-gradient(
-    to top,
-    rgba(255, 235, 59, 0.34) 0%,
-    rgba(255, 235, 59, 0.34) 32%,
-    transparent 32%,
-    transparent 100%
-  );
-  color: #111;
-  border-radius: 2px;
-  padding: 0;
-  font-weight: 500;
-}
-
-/* 当前命中：更明显一点，但依然不整块盖字 */
-:deep(.pdf-hl--active) {
-  background: linear-gradient(
-    to top,
-    rgba(255, 152, 0, 0.45) 0%,
-    rgba(255, 152, 0, 0.45) 38%,
-    transparent 38%,
-    transparent 100%
-  ) !important;
-  color: #111 !important;
-  border-radius: 2px;
-  box-shadow: none;
-  font-weight: 600;
+.hl-box--active {
+  background: rgba(255, 152, 0, 0.34) !important;
+  box-shadow: 0 0 0 1px rgba(255, 152, 0, 0.6);
 }
 </style>
