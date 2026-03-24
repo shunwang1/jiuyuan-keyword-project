@@ -19,87 +19,99 @@
 </template>
 
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref } from 'vue'
-import { useRoute } from 'vue-router'
-import { ElMessage } from 'element-plus'
-import { apiReportPreviewBlob } from '../api/reports'
+  import { onBeforeUnmount, onMounted, ref } from 'vue'
+  import { useRoute } from 'vue-router'
+  import { ElMessage } from 'element-plus'
+  import { apiReportPreviewBlob } from '../api/reports'
 
-const route = useRoute()
+  const route = useRoute()
 
-const loading = ref(false)
-const previewUrl = ref('')
-let previewUrlToRevoke: string | null = null
+  const loading = ref(false)
+  const previewUrl = ref('')
+  let previewUrlToRevoke: string | null = null
 
-function getReportId(): number | null {
-  const id = Number(route.params.id)
-  return Number.isFinite(id) ? id : null
-}
-
-function cleanup() {
-  if (previewUrlToRevoke) {
-    URL.revokeObjectURL(previewUrlToRevoke)
-    previewUrlToRevoke = null
-  }
-  previewUrl.value = ''
-}
-
-const loadData = async () => {
-  const reportId = getReportId()
-  if (!reportId) {
-    ElMessage.error('报告ID无效')
-    return
+  function getReportId(): number | null {
+    const id = Number(route.params.id)
+    return Number.isFinite(id) ? id : null
   }
 
-  loading.value = true
-  try {
-    cleanup()
-    const res = await apiReportPreviewBlob(reportId)
-    const pdfBlob = new Blob([res.blob], { type: 'application/pdf' })
-    const url = URL.createObjectURL(pdfBlob)
-    previewUrl.value = url
-    previewUrlToRevoke = url
-  } catch (e: unknown) {
-    ElMessage.error(
-      e instanceof Error ? e.message : '当前文件暂不可预览，请返回上一页后尝试下载原文件',
-    )
-  } finally {
-    loading.value = false
+  function getKeywordsFromQuery(): string[] {
+    const q = route.query.keyword
+    if (Array.isArray(q)) {
+      return q.map((x) => String(x).trim()).filter(Boolean)
+    }
+    if (typeof q === 'string' && q.trim()) {
+      return [q.trim()]
+    }
+    return []
   }
-}
 
-const reload = async () => {
-  await loadData()
-}
+  function cleanup() {
+    if (previewUrlToRevoke) {
+      URL.revokeObjectURL(previewUrlToRevoke)
+      previewUrlToRevoke = null
+    }
+    previewUrl.value = ''
+  }
 
-onMounted(loadData)
-onBeforeUnmount(cleanup)
+  const loadData = async () => {
+    const reportId = getReportId()
+    if (!reportId) {
+      ElMessage.error('报告ID无效')
+      return
+    }
+
+    loading.value = true
+    try {
+      cleanup()
+      const keywords = getKeywordsFromQuery()
+      const res = await apiReportPreviewBlob(reportId, keywords)
+      const pdfBlob = new Blob([res.blob], { type: 'application/pdf' })
+      const url = URL.createObjectURL(pdfBlob)
+      previewUrl.value = url
+      previewUrlToRevoke = url
+    } catch (e: unknown) {
+      ElMessage.error(
+        e instanceof Error ? e.message : '当前文件暂不可预览，请返回上一页后尝试下载原文件',
+      )
+    } finally {
+      loading.value = false
+    }
+  }
+
+  const reload = async () => {
+    await loadData()
+  }
+
+  onMounted(loadData)
+  onBeforeUnmount(cleanup)
 </script>
 
 <style scoped>
-.page {
-  min-height: 100vh;
-  background: #f5f7fa;
-}
+  .page {
+    min-height: 100vh;
+    background: #f5f7fa;
+  }
 
-.toolbar {
-  position: sticky;
-  top: 0;
-  z-index: 10;
-  background: #fff;
-  border-bottom: 1px solid #ebeef5;
-  padding: 12px 16px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
+  .toolbar {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: #fff;
+    border-bottom: 1px solid #ebeef5;
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
 
-.title {
-  font-weight: 700;
-  font-size: 16px;
-}
+  .title {
+    font-weight: 700;
+    font-size: 16px;
+  }
 
-.content {
-  height: calc(100vh - 58px);
-  padding: 0;
-}
+  .content {
+    height: calc(100vh - 58px);
+    padding: 0;
+  }
 </style>

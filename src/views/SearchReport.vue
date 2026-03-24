@@ -281,479 +281,490 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
-import { ElMessage } from 'element-plus'
-import { request } from '../api/http'
-import { apiQueryKeywords } from '../api/keywords'
-import {
-  apiSearchReports,
-  apiReportFileBlob,
-  apiReportPreviewBlob,
-  apiQueryModelSpecs,
-  apiQueryComponentCategories,
-  apiQueryManufacturers,
-  apiQueryBatchNumbers,
-  apiUpdateReportStatus,
-  type ReportListItem,
-  type SearchReportsResponseData,
-  type ReportStatusCode,
-} from '../api/reports'
+  import { onMounted, reactive, ref } from 'vue'
+  import { ElMessage } from 'element-plus'
+  import { request } from '../api/http'
+  import { apiQueryKeywords } from '../api/keywords'
+  import {
+    apiSearchReports,
+    apiReportFileBlob,
+    apiReportPreviewBlob,
+    apiQueryModelSpecs,
+    apiQueryComponentCategories,
+    apiQueryManufacturers,
+    apiQueryBatchNumbers,
+    apiUpdateReportStatus,
+    type ReportListItem,
+    type SearchReportsResponseData,
+    type ReportStatusCode,
+  } from '../api/reports'
 
-type CategoryRow = { id: number; category: string }
+  type CategoryRow = { id: number; category: string }
 
-type ReportRow = ReportListItem & {
-  componentCategory?: string
-  manufacturerName?: string
-  manufacture?: string
-  batchNumber?: string
-}
-
-type CompareItem = {
-  reportId: number
-  fileName: string
-  url: string
-  loading: boolean
-}
-
-const categories = ref<CategoryRow[]>([])
-const loadingCategories = ref(false)
-
-const query = reactive<{
-  categoryId: number | null
-  modelSpec: string
-  componentCategory: string
-  manufacturerName: string
-  batchNumber: string
-  keywords: string[]
-}>({
-  categoryId: null,
-  modelSpec: '',
-  componentCategory: '',
-  manufacturerName: '',
-  batchNumber: '',
-  keywords: [],
-})
-
-const keywordOptions = ref<string[]>([])
-const loadingKeywords = ref(false)
-
-const options = reactive({
-  modelSpecs: [] as string[],
-  componentCategories: [] as string[],
-  manufacturers: [] as string[],
-  batchNumbers: [] as string[],
-})
-
-const loadingOptions = reactive({
-  modelSpecs: false,
-  componentCategories: false,
-  manufacturers: false,
-  batchNumbers: false,
-})
-
-const page = reactive({ pageNo: 1, pageSize: 15 })
-const total = ref(0)
-const result = ref<ReportRow[]>([])
-const loadingSearch = ref(false)
-const selectedRows = ref<ReportRow[]>([])
-
-const previewVisible = ref(false)
-const previewUrl = ref('')
-let previewUrlToRevoke: string | null = null
-const previewLoadingId = ref<number | null>(null)
-
-const openLoadingId = ref<number | null>(null)
-const downloadLoadingId = ref<number | null>(null)
-
-const compareVisible = ref(false)
-const compareItems = ref<CompareItem[]>([])
-const compareUrlsToRevoke = ref<string[]>([])
-
-const statusDialogVisible = ref(false)
-const statusUpdating = ref(false)
-const statusForm = reactive<{
-  reportId: number | null
-  currentStatus: ReportStatusCode | null
-  newStatus: ReportStatusCode | null
-}>({
-  reportId: null,
-  currentStatus: null,
-  newStatus: null,
-})
-
-const categoryNameById = (v: unknown) => {
-  const n = typeof v === 'number' ? v : Number(v)
-  const hit = categories.value.find((x) => x.id === n)
-  return hit?.category ?? (v == null ? '' : String(v))
-}
-
-const statusLabel = (v: unknown) => {
-  const n = typeof v === 'number' ? v : Number(v)
-  if (n === 1001) return '待处理'
-  if (n === 1002) return '已通过'
-  if (n === 1003) return '已拒绝'
-  return v == null ? '' : String(v)
-}
-
-function normalizeRow(raw: any): ReportRow {
-  return {
-    reportId: Number(raw?.reportId ?? raw?.id ?? raw?.reportID ?? raw?.report_id),
-    fileName: String(raw?.fileName ?? raw?.filename ?? raw?.name ?? ''),
-    category: raw?.category ?? raw?.categoryId ?? '',
-    modelSpec: raw?.modelSpec ?? '',
-    deviceCategory: raw?.deviceCategory ?? raw?.componentCategory ?? '',
-    vendor: raw?.vendor ?? raw?.manufacturerName ?? raw?.manufacture ?? '',
-    batchNo: raw?.batchNo ?? raw?.batchNumber ?? '',
-    prodDate: raw?.prodDate,
-    address: raw?.address,
-    status: raw?.status,
-    createdAt: raw?.createdAt,
-
-    componentCategory: raw?.componentCategory,
-    manufacturerName: raw?.manufacturerName,
-    manufacture: raw?.manufacture,
-    batchNumber: raw?.batchNumber,
+  type ReportRow = ReportListItem & {
+    componentCategory?: string
+    manufacturerName?: string
+    manufacture?: string
+    batchNumber?: string
   }
-}
 
-function parseDownloadFileName(disposition: string): string {
-  let fileName = 'download'
+  type CompareItem = {
+    reportId: number
+    fileName: string
+    url: string
+    loading: boolean
+  }
 
-  const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i)
-  if (utf8Match) {
-    try {
-      fileName = decodeURIComponent(utf8Match[1])
-    } catch {
-      fileName = utf8Match[1]
-    }
-  } else {
-    const normalMatch = disposition.match(/filename="?([^";]+)"?/i)
-    if (normalMatch) {
-      fileName = normalMatch[1]
+  const categories = ref<CategoryRow[]>([])
+  const loadingCategories = ref(false)
+
+  const query = reactive<{
+    categoryId: number | null
+    modelSpec: string
+    componentCategory: string
+    manufacturerName: string
+    batchNumber: string
+    keywords: string[]
+  }>({
+    categoryId: null,
+    modelSpec: '',
+    componentCategory: '',
+    manufacturerName: '',
+    batchNumber: '',
+    keywords: [],
+  })
+
+  const keywordOptions = ref<string[]>([])
+  const loadingKeywords = ref(false)
+
+  const options = reactive({
+    modelSpecs: [] as string[],
+    componentCategories: [] as string[],
+    manufacturers: [] as string[],
+    batchNumbers: [] as string[],
+  })
+
+  const loadingOptions = reactive({
+    modelSpecs: false,
+    componentCategories: false,
+    manufacturers: false,
+    batchNumbers: false,
+  })
+
+  const page = reactive({ pageNo: 1, pageSize: 15 })
+  const total = ref(0)
+  const result = ref<ReportRow[]>([])
+  const loadingSearch = ref(false)
+  const selectedRows = ref<ReportRow[]>([])
+
+  const previewVisible = ref(false)
+  const previewUrl = ref('')
+  let previewUrlToRevoke: string | null = null
+  const previewLoadingId = ref<number | null>(null)
+
+  const openLoadingId = ref<number | null>(null)
+  const downloadLoadingId = ref<number | null>(null)
+
+  const compareVisible = ref(false)
+  const compareItems = ref<CompareItem[]>([])
+  const compareUrlsToRevoke = ref<string[]>([])
+
+  const statusDialogVisible = ref(false)
+  const statusUpdating = ref(false)
+  const statusForm = reactive<{
+    reportId: number | null
+    currentStatus: ReportStatusCode | null
+    newStatus: ReportStatusCode | null
+  }>({
+    reportId: null,
+    currentStatus: null,
+    newStatus: null,
+  })
+
+  const categoryNameById = (v: unknown) => {
+    const n = typeof v === 'number' ? v : Number(v)
+    const hit = categories.value.find((x) => x.id === n)
+    return hit?.category ?? (v == null ? '' : String(v))
+  }
+
+  const statusLabel = (v: unknown) => {
+    const n = typeof v === 'number' ? v : Number(v)
+    if (n === 1001) return '待处理'
+    if (n === 1002) return '已通过'
+    if (n === 1003) return '已拒绝'
+    return v == null ? '' : String(v)
+  }
+
+  function normalizeRow(raw: any): ReportRow {
+    return {
+      reportId: Number(raw?.reportId ?? raw?.id ?? raw?.reportID ?? raw?.report_id),
+      fileName: String(raw?.fileName ?? raw?.filename ?? raw?.name ?? ''),
+      category: raw?.category ?? raw?.categoryId ?? '',
+      modelSpec: raw?.modelSpec ?? '',
+      deviceCategory: raw?.deviceCategory ?? raw?.componentCategory ?? '',
+      vendor: raw?.vendor ?? raw?.manufacturerName ?? raw?.manufacture ?? '',
+      batchNo: raw?.batchNo ?? raw?.batchNumber ?? '',
+      prodDate: raw?.prodDate,
+      address: raw?.address,
+      status: raw?.status,
+      createdAt: raw?.createdAt,
+
+      componentCategory: raw?.componentCategory,
+      manufacturerName: raw?.manufacturerName,
+      manufacture: raw?.manufacture,
+      batchNumber: raw?.batchNumber,
     }
   }
 
-  return fileName
-}
+  function parseDownloadFileName(disposition: string): string {
+    let fileName = 'download'
 
-async function loadCategories() {
-  loadingCategories.value = true
-  try {
-    const data = await request<any[]>('/categories/query', { method: 'GET' })
-    categories.value = (data || [])
-      .map((x) => ({ id: Number(x?.id), category: String(x?.category ?? x?.name ?? '') }))
-      .filter((x) => Number.isFinite(x.id) && x.category)
-  } catch (e: unknown) {
-    ElMessage.error(e instanceof Error ? e.message : '加载类别失败')
-  } finally {
-    loadingCategories.value = false
-  }
-}
-
-async function loadDependents(categoryId: number) {
-  query.keywords = []
-  keywordOptions.value = []
-
-  query.modelSpec = ''
-  query.componentCategory = ''
-  query.manufacturerName = ''
-  query.batchNumber = ''
-
-  options.modelSpecs = []
-  options.componentCategories = []
-  options.manufacturers = []
-  options.batchNumbers = []
-
-  loadingOptions.modelSpecs = true
-  loadingOptions.componentCategories = true
-  loadingOptions.manufacturers = true
-  loadingOptions.batchNumbers = true
-
-  try {
-    const [ms, cc, mf, bn] = await Promise.all([
-      apiQueryModelSpecs(categoryId),
-      apiQueryComponentCategories(categoryId),
-      apiQueryManufacturers(categoryId),
-      apiQueryBatchNumbers(categoryId),
-    ])
-    options.modelSpecs = ms
-    options.componentCategories = cc
-    options.manufacturers = mf
-    options.batchNumbers = bn
-  } catch (e: unknown) {
-    ElMessage.error(e instanceof Error ? e.message : '加载下拉选项失败')
-  } finally {
-    loadingOptions.modelSpecs = false
-    loadingOptions.componentCategories = false
-    loadingOptions.manufacturers = false
-    loadingOptions.batchNumbers = false
-  }
-}
-
-async function getDownloadResource(reportId: number | string) {
-  const res = await apiReportFileBlob(reportId)
-  const disposition =
-    res.headers.get('content-disposition') ||
-    res.headers.get('Content-Disposition') ||
-    ''
-
-  const fileName = parseDownloadFileName(disposition)
-  const blob = new Blob([res.blob])
-
-  return { blob, fileName }
-}
-
-async function getPreviewUrlByReportId(reportId: number | string) {
-  const res = await apiReportPreviewBlob(reportId)
-  const pdfBlob = new Blob([res.blob], { type: 'application/pdf' })
-  return URL.createObjectURL(pdfBlob)
-}
-
-function cleanupPreview() {
-  if (previewUrlToRevoke) {
-    URL.revokeObjectURL(previewUrlToRevoke)
-    previewUrlToRevoke = null
-  }
-  previewUrl.value = ''
-}
-
-function cleanupCompare() {
-  for (const u of compareUrlsToRevoke.value) {
-    URL.revokeObjectURL(u)
-  }
-  compareUrlsToRevoke.value = []
-  compareItems.value = []
-}
-
-onMounted(loadCategories)
-
-const onCategoryChange = async () => {
-  if (!query.categoryId) return
-  await loadDependents(query.categoryId)
-}
-
-const onKeywordsVisibleChange = async (visible: boolean) => {
-  if (!visible) return
-  if (!query.categoryId) return ElMessage.warning('请先选择类别')
-  if (keywordOptions.value.length > 0) return
-
-  loadingKeywords.value = true
-  try {
-    const data = await apiQueryKeywords(query.categoryId)
-    keywordOptions.value = data.keywords || []
-  } catch (e: unknown) {
-    ElMessage.error(e instanceof Error ? e.message : '加载关键词失败')
-  } finally {
-    loadingKeywords.value = false
-  }
-}
-
-const doSearch = async (resetToFirstPage = false) => {
-  if (!query.categoryId) return ElMessage.warning('请选择类别')
-  if (resetToFirstPage) page.pageNo = 1
-
-  loadingSearch.value = true
-  try {
-    const data: SearchReportsResponseData = await apiSearchReports({
-      filters: {
-        category: query.categoryId,
-        modelSpec: query.modelSpec || undefined,
-        deviceCategory: query.componentCategory || undefined,
-        vendor: query.manufacturerName || undefined,
-        batchNo: query.batchNumber || undefined,
-        keywords: query.keywords,
-      },
-      page: { ...page },
-    })
-
-    result.value = (data.list || []).map(normalizeRow)
-    total.value = data.total || 0
-    ElMessage.success('检索完成')
-  } catch (e: unknown) {
-    ElMessage.error(e instanceof Error ? e.message : '检索失败')
-  } finally {
-    loadingSearch.value = false
-  }
-}
-
-const onPageChange = async (p: number) => {
-  page.pageNo = p
-}
-
-const resetForm = () => {
-  query.categoryId = null
-  query.modelSpec = ''
-  query.componentCategory = ''
-  query.manufacturerName = ''
-  query.batchNumber = ''
-  query.keywords = []
-  keywordOptions.value = []
-
-  options.modelSpecs = []
-  options.componentCategories = []
-  options.manufacturers = []
-  options.batchNumbers = []
-
-  result.value = []
-  total.value = 0
-  page.pageNo = 1
-  selectedRows.value = []
-
-  cleanupPreview()
-  cleanupCompare()
-}
-
-const onSelectionChange = (rows: ReportRow[]) => {
-  selectedRows.value = rows
-}
-
-const previewReport = async (row: ReportRow) => {
-  cleanupPreview()
-  previewLoadingId.value = row.reportId
-  try {
-    const url = await getPreviewUrlByReportId(row.reportId)
-    previewUrl.value = url
-    previewUrlToRevoke = url
-    previewVisible.value = true
-  } catch (e: unknown) {
-    ElMessage.error(
-      e instanceof Error ? e.message : '预览失败（当前文件暂不可预览，请尝试下载原文件）',
-    )
-  } finally {
-    previewLoadingId.value = null
-  }
-}
-
-const openReport = async (row: ReportRow) => {
-  openLoadingId.value = row.reportId
-  try {
-    const url = `/report-preview/${row.reportId}`
-    window.open(url, '_blank')
-  } catch (e: unknown) {
-    ElMessage.error(
-      e instanceof Error ? e.message : '打开失败（当前文件暂不可预览，请尝试下载原文件）',
-    )
-  } finally {
-    openLoadingId.value = null
-  }
-}
-
-const downloadReport = async (row: ReportRow) => {
-  downloadLoadingId.value = row.reportId
-  try {
-    const { blob, fileName } = await getDownloadResource(row.reportId)
-    const url = window.URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = fileName
-    document.body.appendChild(a)
-    a.click()
-    a.remove()
-    window.URL.revokeObjectURL(url)
-  } catch (e: unknown) {
-    ElMessage.error(e instanceof Error ? e.message : '下载失败')
-  } finally {
-    downloadLoadingId.value = null
-  }
-}
-
-const openStatusDialog = (row: ReportRow) => {
-  statusForm.reportId = row.reportId
-  const current = typeof row.status === 'number' ? row.status : Number(row.status)
-
-  if (current === 1001 || current === 1002 || current === 1003) {
-    statusForm.currentStatus = current as ReportStatusCode
-    statusForm.newStatus = current as ReportStatusCode
-  } else {
-    statusForm.currentStatus = null
-    statusForm.newStatus = null
-  }
-
-  statusDialogVisible.value = true
-}
-
-const submitStatusUpdate = async () => {
-  if (!statusForm.reportId) return ElMessage.warning('缺少报告ID')
-  if (!statusForm.newStatus) return ElMessage.warning('请选择新的状态')
-
-  statusUpdating.value = true
-  try {
-    await apiUpdateReportStatus({ id: statusForm.reportId, status: statusForm.newStatus })
-    ElMessage.success('状态更新成功')
-
-    const target = result.value.find((r) => r.reportId === statusForm.reportId)
-    if (target) {
-      target.status = statusForm.newStatus
-    }
-
-    statusDialogVisible.value = false
-  } catch (e: unknown) {
-    ElMessage.error(e instanceof Error ? e.message : '更新状态失败')
-  } finally {
-    statusUpdating.value = false
-  }
-}
-
-const openCompare = async () => {
-  if (selectedRows.value.length < 2 || selectedRows.value.length > 3) {
-    return ElMessage.warning('请选择 2 或 3 份报告进行对比')
-  }
-
-  cleanupCompare()
-  compareVisible.value = true
-
-  compareItems.value = selectedRows.value.slice(0, 3).map((r) => ({
-    reportId: r.reportId,
-    fileName: r.fileName,
-    url: '',
-    loading: true,
-  }))
-
-  await Promise.all(
-    compareItems.value.map(async (it) => {
+    const utf8Match = disposition.match(/filename\*=UTF-8''([^;]+)/i)
+    if (utf8Match) {
       try {
-        const url = await getPreviewUrlByReportId(it.reportId)
-        it.url = url
-        it.loading = false
-        compareUrlsToRevoke.value.push(url)
+        fileName = decodeURIComponent(utf8Match[1])
       } catch {
-        it.url = ''
-        it.loading = false
+        fileName = utf8Match[1]
       }
-    }),
-  )
-}
+    } else {
+      const normalMatch = disposition.match(/filename="?([^";]+)"?/i)
+      if (normalMatch) {
+        fileName = normalMatch[1]
+      }
+    }
+
+    return fileName
+  }
+
+  async function loadCategories() {
+    loadingCategories.value = true
+    try {
+      const data = await request<any[]>('/categories/query', { method: 'GET' })
+      categories.value = (data || [])
+        .map((x) => ({ id: Number(x?.id), category: String(x?.category ?? x?.name ?? '') }))
+        .filter((x) => Number.isFinite(x.id) && x.category)
+    } catch (e: unknown) {
+      ElMessage.error(e instanceof Error ? e.message : '加载类别失败')
+    } finally {
+      loadingCategories.value = false
+    }
+  }
+
+  async function loadDependents(categoryId: number) {
+    query.keywords = []
+    keywordOptions.value = []
+
+    query.modelSpec = ''
+    query.componentCategory = ''
+    query.manufacturerName = ''
+    query.batchNumber = ''
+
+    options.modelSpecs = []
+    options.componentCategories = []
+    options.manufacturers = []
+    options.batchNumbers = []
+
+    loadingOptions.modelSpecs = true
+    loadingOptions.componentCategories = true
+    loadingOptions.manufacturers = true
+    loadingOptions.batchNumbers = true
+
+    try {
+      const [ms, cc, mf, bn] = await Promise.all([
+        apiQueryModelSpecs(categoryId),
+        apiQueryComponentCategories(categoryId),
+        apiQueryManufacturers(categoryId),
+        apiQueryBatchNumbers(categoryId),
+      ])
+      options.modelSpecs = ms
+      options.componentCategories = cc
+      options.manufacturers = mf
+      options.batchNumbers = bn
+    } catch (e: unknown) {
+      ElMessage.error(e instanceof Error ? e.message : '加载下拉选项失败')
+    } finally {
+      loadingOptions.modelSpecs = false
+      loadingOptions.componentCategories = false
+      loadingOptions.manufacturers = false
+      loadingOptions.batchNumbers = false
+    }
+  }
+
+  async function getDownloadResource(reportId: number | string) {
+    const res = await apiReportFileBlob(reportId)
+    const disposition =
+      res.headers.get('content-disposition') ||
+      res.headers.get('Content-Disposition') ||
+      ''
+
+    const fileName = parseDownloadFileName(disposition)
+    const blob = new Blob([res.blob])
+
+    return { blob, fileName }
+  }
+
+  async function getPreviewUrlByReportId(reportId: number | string, keywords?: string[]) {
+    const res = await apiReportPreviewBlob(reportId, keywords)
+    const pdfBlob = new Blob([res.blob], { type: 'application/pdf' })
+    return URL.createObjectURL(pdfBlob)
+  }
+
+  function cleanupPreview() {
+    if (previewUrlToRevoke) {
+      URL.revokeObjectURL(previewUrlToRevoke)
+      previewUrlToRevoke = null
+    }
+    previewUrl.value = ''
+  }
+
+  function cleanupCompare() {
+    for (const u of compareUrlsToRevoke.value) {
+      URL.revokeObjectURL(u)
+    }
+    compareUrlsToRevoke.value = []
+    compareItems.value = []
+  }
+
+  function buildPreviewWindowUrl(reportId: number | string, keywords?: string[]) {
+    const params = new URLSearchParams()
+    for (const kw of keywords || []) {
+      const s = (kw ?? '').toString().trim()
+      if (s) params.append('keyword', s)
+    }
+
+    const qs = params.toString()
+    return qs ? `/report-preview/${reportId}?${qs}` : `/report-preview/${reportId}`
+  }
+
+  onMounted(loadCategories)
+
+  const onCategoryChange = async () => {
+    if (!query.categoryId) return
+    await loadDependents(query.categoryId)
+  }
+
+  const onKeywordsVisibleChange = async (visible: boolean) => {
+    if (!visible) return
+    if (!query.categoryId) return ElMessage.warning('请先选择类别')
+    if (keywordOptions.value.length > 0) return
+
+    loadingKeywords.value = true
+    try {
+      const data = await apiQueryKeywords(query.categoryId)
+      keywordOptions.value = data.keywords || []
+    } catch (e: unknown) {
+      ElMessage.error(e instanceof Error ? e.message : '加载关键词失败')
+    } finally {
+      loadingKeywords.value = false
+    }
+  }
+
+  const doSearch = async (resetToFirstPage = false) => {
+    if (!query.categoryId) return ElMessage.warning('请选择类别')
+    if (resetToFirstPage) page.pageNo = 1
+
+    loadingSearch.value = true
+    try {
+      const data: SearchReportsResponseData = await apiSearchReports({
+        filters: {
+          category: query.categoryId,
+          modelSpec: query.modelSpec || undefined,
+          deviceCategory: query.componentCategory || undefined,
+          vendor: query.manufacturerName || undefined,
+          batchNo: query.batchNumber || undefined,
+          keywords: query.keywords,
+        },
+        page: { ...page },
+      })
+
+      result.value = (data.list || []).map(normalizeRow)
+      total.value = data.total || 0
+      ElMessage.success('检索完成')
+    } catch (e: unknown) {
+      ElMessage.error(e instanceof Error ? e.message : '检索失败')
+    } finally {
+      loadingSearch.value = false
+    }
+  }
+
+  const onPageChange = async (p: number) => {
+    page.pageNo = p
+  }
+
+  const resetForm = () => {
+    query.categoryId = null
+    query.modelSpec = ''
+    query.componentCategory = ''
+    query.manufacturerName = ''
+    query.batchNumber = ''
+    query.keywords = []
+    keywordOptions.value = []
+
+    options.modelSpecs = []
+    options.componentCategories = []
+    options.manufacturers = []
+    options.batchNumbers = []
+
+    result.value = []
+    total.value = 0
+    page.pageNo = 1
+    selectedRows.value = []
+
+    cleanupPreview()
+    cleanupCompare()
+  }
+
+  const onSelectionChange = (rows: ReportRow[]) => {
+    selectedRows.value = rows
+  }
+
+  const previewReport = async (row: ReportRow) => {
+    cleanupPreview()
+    previewLoadingId.value = row.reportId
+    try {
+      const url = await getPreviewUrlByReportId(row.reportId, query.keywords)
+      previewUrl.value = url
+      previewUrlToRevoke = url
+      previewVisible.value = true
+    } catch (e: unknown) {
+      ElMessage.error(
+        e instanceof Error ? e.message : '预览失败（当前文件暂不可预览，请尝试下载原文件）',
+      )
+    } finally {
+      previewLoadingId.value = null
+    }
+  }
+
+  const openReport = async (row: ReportRow) => {
+    openLoadingId.value = row.reportId
+    try {
+      const url = buildPreviewWindowUrl(row.reportId, query.keywords)
+      window.open(url, '_blank')
+    } catch (e: unknown) {
+      ElMessage.error(
+        e instanceof Error ? e.message : '打开失败（当前文件暂不可预览，请尝试下载原文件）',
+      )
+    } finally {
+      openLoadingId.value = null
+    }
+  }
+
+  const downloadReport = async (row: ReportRow) => {
+    downloadLoadingId.value = row.reportId
+    try {
+      const { blob, fileName } = await getDownloadResource(row.reportId)
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = fileName
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      window.URL.revokeObjectURL(url)
+    } catch (e: unknown) {
+      ElMessage.error(e instanceof Error ? e.message : '下载失败')
+    } finally {
+      downloadLoadingId.value = null
+    }
+  }
+
+  const openStatusDialog = (row: ReportRow) => {
+    statusForm.reportId = row.reportId
+    const current = typeof row.status === 'number' ? row.status : Number(row.status)
+
+    if (current === 1001 || current === 1002 || current === 1003) {
+      statusForm.currentStatus = current as ReportStatusCode
+      statusForm.newStatus = current as ReportStatusCode
+    } else {
+      statusForm.currentStatus = null
+      statusForm.newStatus = null
+    }
+
+    statusDialogVisible.value = true
+  }
+
+  const submitStatusUpdate = async () => {
+    if (!statusForm.reportId) return ElMessage.warning('缺少报告ID')
+    if (!statusForm.newStatus) return ElMessage.warning('请选择新的状态')
+
+    statusUpdating.value = true
+    try {
+      await apiUpdateReportStatus({ id: statusForm.reportId, status: statusForm.newStatus })
+      ElMessage.success('状态更新成功')
+
+      const target = result.value.find((r) => r.reportId === statusForm.reportId)
+      if (target) {
+        target.status = statusForm.newStatus
+      }
+
+      statusDialogVisible.value = false
+    } catch (e: unknown) {
+      ElMessage.error(e instanceof Error ? e.message : '更新状态失败')
+    } finally {
+      statusUpdating.value = false
+    }
+  }
+
+  const openCompare = async () => {
+    if (selectedRows.value.length < 2 || selectedRows.value.length > 3) {
+      return ElMessage.warning('请选择 2 或 3 份报告进行对比')
+    }
+
+    cleanupCompare()
+    compareVisible.value = true
+
+    compareItems.value = selectedRows.value.slice(0, 3).map((r) => ({
+      reportId: r.reportId,
+      fileName: r.fileName,
+      url: '',
+      loading: true,
+    }))
+
+    await Promise.all(
+      compareItems.value.map(async (it) => {
+        try {
+          const url = await getPreviewUrlByReportId(it.reportId, query.keywords)
+          it.url = url
+          it.loading = false
+          compareUrlsToRevoke.value.push(url)
+        } catch {
+          it.url = ''
+          it.loading = false
+        }
+      }),
+    )
+  }
 </script>
 
 <style scoped>
-.compare {
-  display: grid;
-  gap: 12px;
-  height: 84vh;
-}
+  .compare {
+    display: grid;
+    gap: 12px;
+    height: 84vh;
+  }
 
-.compare__col {
-  display: flex;
-  flex-direction: column;
-  border: 1px solid #ebeef5;
-  background: #fff;
-  overflow: hidden;
-}
+  .compare__col {
+    display: flex;
+    flex-direction: column;
+    border: 1px solid #ebeef5;
+    background: #fff;
+    overflow: hidden;
+  }
 
-.compare__title {
-  padding: 8px 10px;
-  border-bottom: 1px solid #ebeef5;
-  font-weight: 600;
-  font-size: 13px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
+  .compare__title {
+    padding: 8px 10px;
+    border-bottom: 1px solid #ebeef5;
+    font-weight: 600;
+    font-size: 13px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 
-.compare__iframe {
-  width: 100%;
-  height: 100%;
-  border: 0;
-  flex: 1;
-}
+  .compare__iframe {
+    width: 100%;
+    height: 100%;
+    border: 0;
+    flex: 1;
+  }
 </style>
