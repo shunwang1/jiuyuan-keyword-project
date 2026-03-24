@@ -58,8 +58,20 @@
         <el-form-item label="密码" required>
           <el-input v-model="addForm.password" />
         </el-form-item>
-        <el-form-item label="部门ID" required>
-          <el-input-number v-model="addForm.departmentId" :min="0" style="width: 180px" />
+        <el-form-item label="部门" required>
+          <el-select
+            v-model="addForm.departmentId"
+            placeholder="请选择部门"
+            style="width: 240px"
+            :loading="loadingDepartments"
+          >
+            <el-option
+              v-for="dept in departments"
+              :key="dept.id"
+              :label="dept.name"
+              :value="dept.id"
+            />
+          </el-select>
         </el-form-item>
         <el-form-item label="权限">
           <el-select v-model="addForm.securityLevel" style="width: 180px">
@@ -79,6 +91,7 @@
       安全建议：后端最好不要返回明文密码；当前页面不展示密码，后续可改为“重置密码”。<br />
       说明：<br />
       - 查询用户：GET /api/v1/auth/users/query（一次性返回所有）<br />
+      - 查询部门：GET /api/v1/departments/query。<br />
       - 分页展示：前端按每页 15 条切分。<br />
       - 新增用户：POST /api/v1/auth/users/add，请求体字段为 username / password / departmentId / securityLevel。<br />
       - 修改权限：PATCH /api/v1/auth/users/{id}/security-level，再兼容调用 /users/updateRole。<br />
@@ -96,10 +109,12 @@
     apiPatchUserStatus,
     apiPatchUserSecurityLevel,
     apiAuthUsersQuery,
+    apiDepartmentsQuery,
     mapAuthUserToUserListItem,
     type UserListItem,
     type UserRole,
     type UserStatusCode,
+    type DepartmentItem,
   } from '../api/users'
 
   type UserRow = UserListItem & {
@@ -110,8 +125,10 @@
 
   const loading = ref(false)
   const creating = ref(false)
+  const loadingDepartments = ref(false)
 
   const users = ref<UserRow[]>([])
+  const departments = ref<DepartmentItem[]>([])
   const total = ref(0)
   const page = reactive({ pageNo: 1, pageSize: 15 })
 
@@ -146,7 +163,21 @@
     }
   }
 
-  onMounted(loadUsers)
+  const loadDepartments = async () => {
+    loadingDepartments.value = true
+    try {
+      departments.value = await apiDepartmentsQuery()
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : '加载部门失败'
+      ElMessage.error(msg)
+    } finally {
+      loadingDepartments.value = false
+    }
+  }
+
+  onMounted(async () => {
+    await Promise.all([loadUsers(), loadDepartments()])
+  })
 
   const onPageChange = async (p: number) => {
     page.pageNo = p
@@ -211,7 +242,7 @@
   const addUser = async () => {
     if (!addForm.username.trim()) return ElMessage.warning('账号为必要')
     if (!addForm.password.trim()) return ElMessage.warning('密码为必要')
-    if (addForm.departmentId == null) return ElMessage.warning('部门ID为必要')
+    if (addForm.departmentId == null) return ElMessage.warning('部门为必要')
 
     creating.value = true
     try {

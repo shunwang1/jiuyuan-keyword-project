@@ -128,3 +128,28 @@ role: (u.securityLevel === 0 ? 0 : 1) as UserRole,
 frozen: false,
 }
 }
+
+/* ===========================
+* 部门查询
+* GET /api/v1/departments/query
+* =========================== */
+
+export interface DepartmentItem {
+id: number
+name: string
+}
+
+/**
+* 查询部门列表
+* 返回 data: [{ id, name }]
+*/
+export async function apiDepartmentsQuery(): Promise<DepartmentItem[]> {
+const data = await request<any[]>('/departments/query', { method: 'GET' })
+const list = Array.isArray(data) ? data : []
+return list
+.map((x) => ({
+id: Number(x?.id),
+name: String(x?.name ?? ''),
+}))
+.filter((x) => Number.isFinite(x.id) && x.name)
+}
