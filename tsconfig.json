@@ -1,14 +1,10 @@
 {
   "compilerOptions": {
-    // 启用严格模式（包含多个严格类型检查）
     "strict": true,
-    
-    // 强制文件名大小写一致性（避免跨平台问题）
     "forceConsistentCasingInFileNames": true,
-    
-    // 其他推荐配置（根据你的项目需要）
-    "target": "esnext", // 或 "es2020"
-    "module": "esnext", // 或 "commonjs"
+
+    "target": "esnext",
+    "module": "esnext",
     "lib": ["esnext", "dom"],
     "moduleResolution": "node",
     "esModuleInterop": true,
@@ -16,18 +12,18 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "allowSyntheticDefaultImports": true,
-    
-    // Vue 3 推荐配置
-    "jsx": "preserve", // 如果使用 JSX
+
+    "jsx": "preserve",
     "declaration": false,
     "declarationMap": false,
     "sourceMap": true,
-    
-    // 路径别名配置
+
     "baseUrl": ".",
     "paths": {
       "@/*": ["src/*"]
-    }
+    },
+
+    "noEmit": true
   },
   "include": [
     "src/**/*.ts",

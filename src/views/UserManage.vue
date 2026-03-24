@@ -51,18 +51,18 @@
     </div>
 
     <el-dialog v-model="addDialogVisible" title="增加用户" width="520px">
-      <el-form :model="addForm" label-width="90px">
+      <el-form :model="addForm" label-width="100px">
         <el-form-item label="账号" required>
           <el-input v-model="addForm.username" />
         </el-form-item>
         <el-form-item label="密码" required>
           <el-input v-model="addForm.password" />
         </el-form-item>
-        <el-form-item label="部门" required>
-          <el-input v-model="addForm.dept" />
+        <el-form-item label="部门ID" required>
+          <el-input-number v-model="addForm.departmentId" :min="0" style="width: 180px" />
         </el-form-item>
         <el-form-item label="权限">
-          <el-select v-model="addForm.role" style="width: 180px">
+          <el-select v-model="addForm.securityLevel" style="width: 180px">
             <el-option :value="1" label="1 普通用户" />
             <el-option :value="0" label="0 管理员" />
           </el-select>
@@ -80,7 +80,7 @@
       说明：<br />
       - 查询用户：GET /api/v1/auth/users/query（一次性返回所有）<br />
       - 分页展示：前端按每页 15 条切分。<br />
-      - 新增用户：POST /api/v1/auth/users/add。<br />
+      - 新增用户：POST /api/v1/auth/users/add，请求体字段为 username / password / departmentId / securityLevel。<br />
       - 修改权限：PATCH /api/v1/auth/users/{id}/security-level，再兼容调用 /users/updateRole。<br />
       - 冻结/解冻：PATCH /api/v1/auth/users/{id}/status。
     </div>
@@ -88,148 +88,147 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
-import { ElMessage } from 'element-plus'
-import {
-  apiCreateUser,
-  apiUpdateUserRole,
-  apiPatchUserStatus,
-  apiPatchUserSecurityLevel,
-  apiAuthUsersQuery,
-  mapAuthUserToUserListItem,
-  type UserListItem,
-  type UserRole,
-  type UserStatusCode,
-} from '../api/users'
+  import { computed, onMounted, reactive, ref } from 'vue'
+  import { ElMessage } from 'element-plus'
+  import {
+    apiCreateUser,
+    apiUpdateUserRole,
+    apiPatchUserStatus,
+    apiPatchUserSecurityLevel,
+    apiAuthUsersQuery,
+    mapAuthUserToUserListItem,
+    type UserListItem,
+    type UserRole,
+    type UserStatusCode,
+  } from '../api/users'
 
-type UserRow = UserListItem & {
-  password?: string
-  statusCode: UserStatusCode
-  securityLevelForPatch: 0 | 1
-}
-
-const loading = ref(false)
-const creating = ref(false)
-
-const users = ref<UserRow[]>([])
-const total = ref(0)
-const page = reactive({ pageNo: 1, pageSize: 15 })
-
-const pagedUsers = computed(() => {
-  const start = (page.pageNo - 1) * page.pageSize
-  return users.value.slice(start, start + page.pageSize)
-})
-
-const mapToRow = (u: UserListItem): UserRow => {
-  return {
-    ...u,
-    statusCode: u.frozen ? 0 : 1,
-    securityLevelForPatch: u.role === 0 ? 0 : 1,
+  type UserRow = UserListItem & {
+    password?: string
+    statusCode: UserStatusCode
+    securityLevelForPatch: 0 | 1
   }
-}
 
-const loadUsers = async () => {
-  loading.value = true
-  try {
-    const data = await apiAuthUsersQuery()
-    const list = data.list || []
+  const loading = ref(false)
+  const creating = ref(false)
 
-    const mapped: UserListItem[] = list.map(mapAuthUserToUserListItem)
-    users.value = mapped.map(mapToRow)
-    total.value = users.value.length
-    page.pageNo = 1
-  } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : '加载用户失败'
-    ElMessage.error(msg)
-  } finally {
-    loading.value = false
+  const users = ref<UserRow[]>([])
+  const total = ref(0)
+  const page = reactive({ pageNo: 1, pageSize: 15 })
+
+  const pagedUsers = computed(() => {
+    const start = (page.pageNo - 1) * page.pageSize
+    return users.value.slice(start, start + page.pageSize)
+  })
+
+  const mapToRow = (u: UserListItem): UserRow => {
+    return {
+      ...u,
+      statusCode: u.frozen ? 0 : 1,
+      securityLevelForPatch: u.role === 0 ? 0 : 1,
+    }
   }
-}
 
-onMounted(loadUsers)
+  const loadUsers = async () => {
+    loading.value = true
+    try {
+      const data = await apiAuthUsersQuery()
+      const list = data.list || []
 
-const onPageChange = async (p: number) => {
-  page.pageNo = p
-}
+      const mapped: UserListItem[] = list.map(mapAuthUserToUserListItem)
+      users.value = mapped.map(mapToRow)
+      total.value = users.value.length
+      page.pageNo = 1
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : '加载用户失败'
+      ElMessage.error(msg)
+    } finally {
+      loading.value = false
+    }
+  }
 
-const onRoleChange = async (row: UserRow) => {
-  const newSecurityLevel = row.securityLevelForPatch
+  onMounted(loadUsers)
 
-  try {
-    await apiPatchUserSecurityLevel({ id: row.userId, securityLevel: newSecurityLevel })
+  const onPageChange = async (p: number) => {
+    page.pageNo = p
+  }
 
-    row.role = newSecurityLevel as UserRole
+  const onRoleChange = async (row: UserRow) => {
+    const newSecurityLevel = row.securityLevelForPatch
 
     try {
-      await apiUpdateUserRole({ userId: row.userId, role: row.role as UserRole })
-    } catch {
-      // ignore old api failure
+      await apiPatchUserSecurityLevel({ id: row.userId, securityLevel: newSecurityLevel })
+
+      row.role = newSecurityLevel as UserRole
+
+      try {
+        await apiUpdateUserRole({ userId: row.userId, role: row.role as UserRole })
+      } catch {
+        // ignore old api failure
+      }
+
+      ElMessage.success('权限已更新')
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : '更新权限失败'
+      ElMessage.error(msg)
+      await loadUsers()
     }
-
-    ElMessage.success('权限已更新')
-  } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : '更新权限失败'
-    ElMessage.error(msg)
-    await loadUsers()
   }
-}
 
-const onStatusChange = async (row: UserRow) => {
-  try {
-    await apiPatchUserStatus({ id: row.userId, status: row.statusCode })
-    row.frozen = row.statusCode === 0
-    ElMessage.success(row.statusCode === 0 ? '已冻结' : '已解冻')
-  } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : '操作失败'
-    ElMessage.error(msg)
-    await loadUsers()
+  const onStatusChange = async (row: UserRow) => {
+    try {
+      await apiPatchUserStatus({ id: row.userId, status: row.statusCode })
+      row.frozen = row.statusCode === 0
+      ElMessage.success(row.statusCode === 0 ? '已冻结' : '已解冻')
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : '操作失败'
+      ElMessage.error(msg)
+      await loadUsers()
+    }
   }
-}
 
-const addDialogVisible = ref(false)
+  const addDialogVisible = ref(false)
 
-const addForm = reactive<{
-  username: string
-  password: string
-  dept: string
-  role: UserRole
-}>({
-  username: '',
-  password: '',
-  dept: '',
-  role: 1,
-})
+  const addForm = reactive<{
+    username: string
+    password: string
+    departmentId: number | null
+    securityLevel: UserRole
+  }>({
+    username: '',
+    password: '',
+    departmentId: null,
+    securityLevel: 1,
+  })
 
-const openAddDialog = () => {
-  addForm.username = ''
-  addForm.password = ''
-  addForm.dept = ''
-  addForm.role = 1
-  addDialogVisible.value = true
-}
-
-const addUser = async () => {
-  if (!addForm.username.trim()) return ElMessage.warning('账号为必要')
-  if (!addForm.password.trim()) return ElMessage.warning('密码为必要')
-  if (!addForm.dept.trim()) return ElMessage.warning('部门为必要')
-
-  creating.value = true
-  try {
-    await apiCreateUser({
-      username: addForm.username.trim(),
-      password: addForm.password.trim(),
-      dept: addForm.dept.trim(),
-      role: addForm.role,
-    })
-    ElMessage.success('新增用户成功')
-    addDialogVisible.value = false
-    await loadUsers()
-  } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : '新增失败'
-    ElMessage.error(msg)
-  } finally {
-    creating.value = false
+  const openAddDialog = () => {
+    addForm.username = ''
+    addForm.password = ''
+    addForm.departmentId = null
+    addForm.securityLevel = 1
+    addDialogVisible.value = true
   }
-}
+
+  const addUser = async () => {
+    if (!addForm.username.trim()) return ElMessage.warning('账号为必要')
+    if (!addForm.password.trim()) return ElMessage.warning('密码为必要')
+    if (addForm.departmentId == null) return ElMessage.warning('部门ID为必要')
+
+    creating.value = true
+    try {
+      await apiCreateUser({
+        username: addForm.username.trim(),
+        password: addForm.password.trim(),
+        departmentId: addForm.departmentId,
+        securityLevel: addForm.securityLevel,
+      })
+      ElMessage.success('新增用户成功')
+      addDialogVisible.value = false
+      await loadUsers()
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : '新增失败'
+      ElMessage.error(msg)
+    } finally {
+      creating.value = false
+    }
+  }
 </script>
-
