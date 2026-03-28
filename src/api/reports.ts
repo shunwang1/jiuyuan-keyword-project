@@ -5,6 +5,7 @@
 // - 文件下载（原生 fetch 获取 blob + headers）
 // - 文件预览（原生 fetch 获取 pdf blob + headers）
 // - 报告状态更新
+// - 报告关键词刷新
 // - 上传页下拉 query/add/delete
 
 import { request, type BlobResponse, JWT_TOKEN_LS_KEY } from './http'
@@ -45,7 +46,7 @@ createdAt?: string
 }
 
 export interface ReportSearchFilters {
-category: ReportCategory
+category?: ReportCategory
 modelSpec?: string
 deviceCategory?: string
 vendor?: string
@@ -145,9 +146,6 @@ status: resp.status,
 /**
 * 预览报告（获取 PDF blob）
 * GET /api/v1/reports/preview?id={reportId}&keyword=kw1&keyword=kw2
-*
-* keyword 可选，可重复传递
-* content-type 必须是 application/pdf，否则视为不可预览
 */
 export async function apiReportPreviewBlob(
 id: number | string,
@@ -232,9 +230,19 @@ method: 'PATCH',
 }
 
 /**
+* 刷新报告关键词匹配
+* POST /api/v1/reports/refresh-keywords?category={categoryId}
+*/
+export function apiRefreshReportKeywords(categoryId: number) {
+const qs = new URLSearchParams({ category: String(categoryId) }).toString()
+return request<null>(`/reports/refresh-keywords?${qs}`, {
+method: 'POST',
+})
+}
+
+/**
 * 搜索报告
-* category 传数字ID
-* 返回兼容 list / records / rows
+* category 改为可选；如果没选类别则不传
 */
 export async function apiSearchReports({ filters, page }: SearchReportsParams): Promise<SearchReportsResponseData> {
 if (USE_MOCK_API) {
@@ -243,7 +251,9 @@ return mockReportsSearch({ filters, page }) as SearchReportsResponseData
 
 const params = new URLSearchParams()
 
+if (filters.category !== undefined && filters.category !== null && String(filters.category).trim()) {
 params.set('category', String(filters.category))
+}
 
 for (const kw of filters.keywords || []) {
 const s = (kw ?? '').toString().trim()

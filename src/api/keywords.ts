@@ -6,107 +6,111 @@ import { USE_MOCK_API } from '../config/dev'
 import { mockKeywordsQuery, mockKeywordsAdd, mockKeywordsRemove, mockKeywordsUpdate } from './mock'
 
 export interface KeywordsQueryResponseData {
-  keywords: string[]
+keywords: string[]
 }
 
 /**
- * 查询关键词
- * GET /api/v1/keywords/query?category=1
- *
- * 兼容后端不同返回结构：
- * - 直接返回 string[]
- * - 返回 { keywords: string[] }
- * - 返回 { list: string[] }
- * - 返回 { data: { keywords/list } }
- */
+* 查询关键词
+* GET /api/v1/keywords/query?category=1
+*/
 export async function apiQueryKeywords(categoryId: number): Promise<KeywordsQueryResponseData> {
-  if (USE_MOCK_API) return mockKeywordsQuery(String(categoryId))
+if (USE_MOCK_API) return mockKeywordsQuery(String(categoryId))
 
-  const raw = await request<any>(`/keywords/query?category=${encodeURIComponent(categoryId)}`, {
-    method: 'GET',
-  })
+const raw = await request<any>(`/keywords/query?category=${encodeURIComponent(categoryId)}`, {
+method: 'GET',
+})
 
-  const pickList = (v: any): string[] => {
-    if (Array.isArray(v)) return v.map((x) => String(x)).map((s) => s.trim()).filter(Boolean)
-    return []
-  }
+const pickList = (v: any): string[] => {
+if (Array.isArray(v)) return v.map((x) => String(x)).map((s) => s.trim()).filter(Boolean)
+return []
+}
 
-  if (Array.isArray(raw)) return { keywords: pickList(raw) }
+if (Array.isArray(raw)) return { keywords: pickList(raw) }
 
-  if (raw && typeof raw === 'object') {
-    if (Array.isArray(raw.keywords)) return { keywords: pickList(raw.keywords) }
-    if (Array.isArray(raw.list)) return { keywords: pickList(raw.list) }
+if (raw && typeof raw === 'object') {
+if (Array.isArray(raw.keywords)) return { keywords: pickList(raw.keywords) }
+if (Array.isArray(raw.list)) return { keywords: pickList(raw.list) }
 
-    const d = (raw as any).data
-    if (d && typeof d === 'object') {
-      if (Array.isArray(d.keywords)) return { keywords: pickList(d.keywords) }
-      if (Array.isArray(d.list)) return { keywords: pickList(d.list) }
-    }
-  }
+const d = (raw as any).data
+if (d && typeof d === 'object') {
+if (Array.isArray(d.keywords)) return { keywords: pickList(d.keywords) }
+if (Array.isArray(d.list)) return { keywords: pickList(d.list) }
+}
+}
 
-  return { keywords: [] }
+return { keywords: [] }
 }
 
 /**
- * 新增关键词
- * POST /api/v1/keywords/add
- * Content-Type: application/x-www-form-urlencoded
- * body: category=1&keyword=xxx
- */
+* 新增关键词
+* POST /api/v1/keywords/add
+*/
 export async function apiAddKeyword(params: { categoryId: number; keyword: string }): Promise<null> {
-  if (USE_MOCK_API) return mockKeywordsAdd(String(params.categoryId), params.keyword)
+if (USE_MOCK_API) return mockKeywordsAdd(String(params.categoryId), params.keyword)
 
-  const body = new URLSearchParams({
-    category: String(params.categoryId),
-    keyword: params.keyword,
-  })
+const body = new URLSearchParams({
+category: String(params.categoryId),
+keyword: params.keyword,
+})
 
-  return request<null>('/keywords/add', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body,
-  })
+return request<null>('/keywords/add', {
+method: 'POST',
+headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+body,
+})
 }
 
 /**
- * 删除关键词
- * DELETE /api/v1/keywords/delete?category=1&keyword=xxx
- */
+* 删除关键词
+* DELETE /api/v1/keywords/delete?category=1&keyword=xxx
+*/
 export async function apiRemoveKeyword(params: { categoryId: number; keyword: string }): Promise<null> {
-  if (USE_MOCK_API) return mockKeywordsRemove(String(params.categoryId), params.keyword)
+if (USE_MOCK_API) return mockKeywordsRemove(String(params.categoryId), params.keyword)
 
-  const qs = new URLSearchParams({
-    category: String(params.categoryId),
-    keyword: params.keyword,
-  }).toString()
+const qs = new URLSearchParams({
+category: String(params.categoryId),
+keyword: params.keyword,
+}).toString()
 
-  return request<null>(`/keywords/delete?${qs}`, { method: 'DELETE' })
+return request<null>(`/keywords/delete?${qs}`, { method: 'DELETE' })
 }
 
 /**
- * 修改关键词
- * PATCH /api/v1/keywords/update
- * Content-Type: application/x-www-form-urlencoded
- * body: category=1&oldKeyword=aaa&newKeyword=bbb
- */
+* 修改关键词
+* PATCH /api/v1/keywords/update
+*/
 export async function apiUpdateKeyword(params: {
-  categoryId: number
-  oldKeyword: string
-  newKeyword: string
+categoryId: number
+oldKeyword: string
+newKeyword: string
 }): Promise<null> {
-  if (USE_MOCK_API) {
-    return mockKeywordsUpdate(String(params.categoryId), params.oldKeyword, params.newKeyword)
-  }
+if (USE_MOCK_API) {
+return mockKeywordsUpdate(String(params.categoryId), params.oldKeyword, params.newKeyword)
+}
 
-  const body = new URLSearchParams({
-    category: String(params.categoryId),
-    oldKeyword: params.oldKeyword,
-    newKeyword: params.newKeyword,
-  })
+const body = new URLSearchParams({
+category: String(params.categoryId),
+oldKeyword: params.oldKeyword,
+newKeyword: params.newKeyword,
+})
 
-  return request<null>('/keywords/update', {
-    method: 'PATCH',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body,
-  })
+return request<null>('/keywords/update', {
+method: 'PATCH',
+headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+body,
+})
+}
+
+/**
+* 刷新报告关键词匹配
+* POST /api/v1/reports/refresh-keywords?category={categoryId}
+*/
+export async function apiRefreshReportKeywords(categoryId: number): Promise<null> {
+const qs = new URLSearchParams({
+category: String(categoryId),
+}).toString()
+
+return request<null>(`/reports/refresh-keywords?${qs}`, {
+method: 'POST',
+})
 }

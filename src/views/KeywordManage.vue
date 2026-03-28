@@ -24,6 +24,17 @@
           >
             <el-option v-for="c in categories" :key="c.id" :label="c.category" :value="c.id" />
           </el-select>
+
+          <el-button
+            style="margin-left: 12px"
+            type="primary"
+            plain
+            :disabled="!categoryId"
+            :loading="refreshing"
+            @click="refreshKeywords"
+          >
+            刷新关键词
+          </el-button>
         </el-form-item>
       </el-form>
     </div>
@@ -54,7 +65,7 @@
     </el-table>
 
     <div style="margin-top: 10px; color:#999; font-size:12px">
-      对齐后端：category 一律使用数字ID；新增/修改使用 urlencoded；删除使用 DELETE + querystring。
+      对齐后端：category 一律使用数字ID；新增/修改使用 urlencoded；删除使用 DELETE + querystring；刷新关键词使用 POST /reports/refresh-keywords。
     </div>
 
     <el-dialog v-model="editVisible" title="修改关键词" width="520px">
@@ -79,7 +90,13 @@
   import { computed, onMounted, reactive, ref } from 'vue'
   import { ElMessage, ElMessageBox } from 'element-plus'
   import { request, type RequestError } from '../api/http'
-  import { apiQueryKeywords, apiAddKeyword, apiRemoveKeyword, apiUpdateKeyword } from '../api/keywords'
+  import {
+    apiQueryKeywords,
+    apiAddKeyword,
+    apiRemoveKeyword,
+    apiUpdateKeyword,
+    apiRefreshReportKeywords,
+  } from '../api/keywords'
 
   type KeywordRow = { keyword: string }
   type CategoryRow = { id: number; category: string }
@@ -88,6 +105,7 @@
   const loadingCategories = ref(false)
 
   const loadingKeywords = ref(false)
+  const refreshing = ref(false)
   const categoryId = ref<number | null>(null)
 
   const filterText = ref('')
@@ -145,6 +163,21 @@
       handleApiError(e, '加载关键词失败')
     } finally {
       loadingKeywords.value = false
+    }
+  }
+
+  const refreshKeywords = async () => {
+    if (!categoryId.value) return ElMessage.warning('请先选择类别')
+
+    refreshing.value = true
+    try {
+      await apiRefreshReportKeywords(categoryId.value)
+      ElMessage.success('刷新成功')
+      await loadKeywords()
+    } catch (e: unknown) {
+      handleApiError(e, '刷新失败')
+    } finally {
+      refreshing.value = false
     }
   }
 

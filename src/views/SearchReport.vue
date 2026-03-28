@@ -5,26 +5,27 @@
     </template>
 
     <el-form label-width="110px" style="max-width: 980px">
-      <el-form-item label="报告类别" required>
+      <el-form-item label="报告类别">
         <el-select
           v-model="query.categoryId"
-          placeholder="请选择类别"
+          placeholder="请选择类别（可选）"
           style="width: 320px"
           filterable
+          clearable
           :loading="loadingCategories"
           @change="onCategoryChange"
         >
           <el-option v-for="c in categories" :key="c.id" :label="c.category" :value="c.id" />
         </el-select>
         <div style="color:#999; font-size:12px; margin-left: 12px">
-          先选择类别，系统会自动加载厂家/门类/型号规格/批号的候选项
+          类别不再强制；如果选择类别，系统会自动加载厂家/门类/型号规格/批号候选项
         </div>
       </el-form-item>
 
       <el-form-item label="厂家信息">
         <el-select
           v-model="query.manufacturerName"
-          placeholder="请先选择厂家（推荐）"
+          placeholder="请选择厂家（可选）"
           style="width: 520px"
           filterable
           clearable
@@ -38,7 +39,7 @@
       <el-form-item label="元器件门类">
         <el-select
           v-model="query.componentCategory"
-          placeholder="请选择元器件门类"
+          placeholder="请选择元器件门类（可选）"
           style="width: 520px"
           filterable
           clearable
@@ -52,7 +53,7 @@
       <el-form-item label="型号规格">
         <el-select
           v-model="query.modelSpec"
-          placeholder="请选择型号规格"
+          placeholder="请选择型号规格（可选）"
           style="width: 520px"
           filterable
           clearable
@@ -86,7 +87,7 @@
           collapse-tags-tooltip
           placeholder="请选择关键词（可多选）"
           style="width: 520px"
-          :disabled="!query.categoryId"
+          :disabled="false"
           :loading="loadingKeywords"
           @visible-change="onKeywordsVisibleChange"
         >
@@ -107,7 +108,7 @@
         </el-button>
 
         <div style="color:#999; font-size:12px; margin-top: 6px">
-          推荐选择顺序：厂家 → 门类 → 型号规格 → 批号 → 关键词。
+          可直接按关键词检索；若先选类别，可进一步筛选厂家/门类/型号规格/批号。
         </div>
       </el-form-item>
     </el-form>
@@ -451,9 +452,6 @@
   }
 
   async function loadDependents(categoryId: number) {
-    query.keywords = []
-    keywordOptions.value = []
-
     query.modelSpec = ''
     query.componentCategory = ''
     query.manufacturerName = ''
@@ -539,13 +537,25 @@
   onMounted(loadCategories)
 
   const onCategoryChange = async () => {
-    if (!query.categoryId) return
+    if (!query.categoryId) {
+      query.modelSpec = ''
+      query.componentCategory = ''
+      query.manufacturerName = ''
+      query.batchNumber = ''
+
+      options.modelSpecs = []
+      options.componentCategories = []
+      options.manufacturers = []
+      options.batchNumbers = []
+      return
+    }
+
     await loadDependents(query.categoryId)
   }
 
   const onKeywordsVisibleChange = async (visible: boolean) => {
     if (!visible) return
-    if (!query.categoryId) return ElMessage.warning('请先选择类别')
+    if (!query.categoryId) return
     if (keywordOptions.value.length > 0) return
 
     loadingKeywords.value = true
@@ -560,14 +570,20 @@
   }
 
   const doSearch = async (resetToFirstPage = false) => {
-    if (!query.categoryId) return ElMessage.warning('请选择类别')
+    const hasCategory = query.categoryId != null
+    const hasKeywords = query.keywords.length > 0
+
+    if (!hasCategory && !hasKeywords) {
+      return ElMessage.warning('请至少选择一个关键词或一个报告类别')
+    }
+
     if (resetToFirstPage) page.pageNo = 1
 
     loadingSearch.value = true
     try {
       const data: SearchReportsResponseData = await apiSearchReports({
         filters: {
-          category: query.categoryId,
+          category: query.categoryId ?? undefined,
           modelSpec: query.modelSpec || undefined,
           deviceCategory: query.componentCategory || undefined,
           vendor: query.manufacturerName || undefined,
