@@ -2,6 +2,8 @@
 // 报告管理相关API接口
 // - 上传
 // - 搜索
+// - 按报告编号搜索
+// - 按关键词搜索
 // - 文件下载（原生 fetch 获取 blob + headers）
 // - 文件预览（原生 fetch 获取 pdf blob + headers）
 // - 报告状态更新
@@ -22,6 +24,7 @@ export type ReportCategory = number | string
 export interface UploadReportParams {
 file: File
 category: number
+reportNo: string
 modelSpec?: string
 componentCategory?: string
 manufacturerName?: string
@@ -32,6 +35,7 @@ export interface ReportListItem {
 reportId: number
 fileName: string
 category: ReportCategory
+reportNo?: string
 
 modelSpec?: string
 deviceCategory?: string
@@ -71,6 +75,18 @@ list: ReportListItem[]
 total: number
 }
 
+export interface SearchByReportNoParams {
+reportNo: string
+page: number
+pageSize: number
+}
+
+export interface SearchByKeywordsParams {
+keywords: string[]
+page: number
+pageSize: number
+}
+
 function readToken(): string | null {
 try {
 return localStorage.getItem(JWT_TOKEN_LS_KEY)
@@ -87,6 +103,7 @@ export function apiUploadReport(params: UploadReportParams) {
 const fd = new FormData()
 fd.append('file', params.file)
 fd.append('category', String(params.category))
+fd.append('reportNo', params.reportNo)
 
 if (params.modelSpec) fd.append('modelSpec', params.modelSpec)
 if (params.componentCategory) fd.append('componentCategory', params.componentCategory)
@@ -241,10 +258,13 @@ method: 'POST',
 }
 
 /**
-* 搜索报告
+* 搜索报告（原综合检索）
 * category 改为可选；如果没选类别则不传
 */
-export async function apiSearchReports({ filters, page }: SearchReportsParams): Promise<SearchReportsResponseData> {
+export async function apiSearchReports({
+filters,
+page,
+}: SearchReportsParams): Promise<SearchReportsResponseData> {
 if (USE_MOCK_API) {
 return mockReportsSearch({ filters, page }) as SearchReportsResponseData
 }
@@ -282,6 +302,82 @@ const raw = await request<any>('/reports/search', {
 method: 'POST',
 headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
 body: params,
+})
+
+const list = Array.isArray(raw?.list)
+? raw.list
+: Array.isArray(raw?.records)
+? raw.records
+: Array.isArray(raw?.rows)
+? raw.rows
+: []
+
+const totalRaw = raw?.total ?? raw?.count ?? raw?.pageTotal ?? list.length
+const total = Number.isFinite(Number(totalRaw)) ? Number(totalRaw) : list.length
+
+return {
+list,
+total,
+}
+}
+
+/**
+* 按报告编号搜索
+* POST /api/v1/reports/search-by-report-no
+*/
+export async function apiSearchReportsByReportNo(
+params: SearchByReportNoParams,
+): Promise<SearchReportsResponseData> {
+const body = new URLSearchParams()
+
+body.set('reportNo', params.reportNo.trim())
+body.set('page', String(params.page > 0 ? Math.floor(params.page) : 1))
+body.set('pageSize', String(Math.min(15, Math.max(1, Math.floor(params.pageSize || 15)))))
+
+const raw = await request<any>('/reports/search-by-report-no', {
+method: 'POST',
+headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+body,
+})
+
+const list = Array.isArray(raw?.list)
+? raw.list
+: Array.isArray(raw?.records)
+? raw.records
+: Array.isArray(raw?.rows)
+? raw.rows
+: []
+
+const totalRaw = raw?.total ?? raw?.count ?? raw?.pageTotal ?? list.length
+const total = Number.isFinite(Number(totalRaw)) ? Number(totalRaw) : list.length
+
+return {
+list,
+total,
+}
+}
+
+/**
+* 按关键词搜索（全库）
+* POST /api/v1/reports/search-by-keywords
+*/
+export async function apiSearchReportsByKeywords(
+params: SearchByKeywordsParams,
+): Promise<SearchReportsResponseData> {
+const body = new URLSearchParams()
+
+for (const kw of params.keywords || []) {
+const s = (kw ?? '').toString().trim()
+if (s) body.append('keyword', s)
+}
+
+body.set('page', String(params.page > 0 ? Math.floor(params.page) : 1))
+body.set('pageSize', String(Math.min(15, Math.max(1, Math.floor(params.pageSize || 15)))))
+
+const raw = await request<any>('/reports/search-by-keywords', {
+method: 'POST',
+headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+body,
 })
 
 const list = Array.isArray(raw?.list)

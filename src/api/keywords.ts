@@ -42,6 +42,35 @@ return { keywords: [] }
 }
 
 /**
+* 查询全库所有关键词
+* GET /api/v1/keywords/query-all
+*/
+export async function apiQueryAllKeywords(): Promise<string[]> {
+const raw = await request<any>('/keywords/query-all', {
+method: 'GET',
+})
+
+const pickList = (v: any): string[] => {
+if (Array.isArray(v)) return v.map((x) => String(x)).map((s) => s.trim()).filter(Boolean)
+return []
+}
+
+if (Array.isArray(raw)) return pickList(raw)
+
+if (raw && typeof raw === 'object') {
+if (Array.isArray(raw.keywords)) return pickList(raw.keywords)
+if (Array.isArray(raw.list)) return pickList(raw.list)
+
+const d = (raw as any).data
+if (d && typeof d === 'object') {
+if (Array.isArray(d.keywords)) return pickList(d.keywords)
+if (Array.isArray(d.list)) return pickList(d.list) }
+}
+
+return []
+}
+
+/**
 * 新增关键词
 * POST /api/v1/keywords/add
 */
