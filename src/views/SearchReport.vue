@@ -219,6 +219,7 @@
       />
     </div>
 
+    <!-- 单份预览 -->
     <el-dialog
       v-model="previewVisible"
       title="报告预览"
@@ -241,6 +242,7 @@
       </template>
     </el-dialog>
 
+    <!-- 对比预览 -->
     <el-dialog
       v-model="compareVisible"
       title="报告对比预览"
@@ -249,27 +251,93 @@
       :destroy-on-close="true"
       @closed="cleanupCompare"
     >
-      <div
-        class="compare"
-        :style="{ gridTemplateColumns: `repeat(${compareItems.length || 1}, 1fr)` }"
-      >
-        <div v-for="it in compareItems" :key="it.reportId" class="compare__col">
-          <div class="compare__title" :title="it.fileName">{{ it.fileName }}</div>
-          <div v-if="it.loading" style="padding: 10px; color:#999">加载中...</div>
-          <iframe
-            v-else-if="it.url"
-            :src="it.url"
-            class="compare__iframe"
-          />
-          <div v-else style="padding: 12px; color:#999">暂无可预览内容</div>
+      <div style="display:flex; gap: 12px; height: 84vh;">
+        <div
+          class="compare"
+          :style="{ gridTemplateColumns: `repeat(${compareItems.length || 1}, 1fr)` }"
+        >
+          <div v-for="it in compareItems" :key="it.reportId" class="compare__col">
+            <div class="compare__title" :title="it.fileName">{{ it.fileName }}</div>
+            <div v-if="it.loading" style="padding: 10px; color:#999">加载中...</div>
+            <iframe
+              v-else-if="it.url"
+              :src="it.url"
+              class="compare__iframe"
+            />
+            <div v-else style="padding: 12px; color:#999">暂无可预览内容</div>
+          </div>
         </div>
+
+        <div class="keyword-panel">
+          <div class="keyword-panel__title">比对关键词</div>
+
+          <div style="color:#999; font-size: 12px; margin-bottom: 8px;">
+            请选择一个当前检索关键词进行比对
+          </div>
+
+          <div v-if="keywordOptionsForCompare.length === 0" style="color:#999; padding: 8px 0;">
+            当前没有可用关键词，请先在检索条件中选择关键词
+          </div>
+
+          <div v-else class="keyword-tag-wrap">
+            <el-tag
+              v-for="k in keywordOptionsForCompare"
+              :key="k"
+              class="keyword-tag"
+              :type="selectedCompareKeyword === k ? 'primary' : 'info'"
+              :effect="selectedCompareKeyword === k ? 'dark' : 'light'"
+              round
+              @click="selectedCompareKeyword = k"
+            >
+              {{ k }}
+            </el-tag>
+          </div>
+
+          <div style="display:flex; gap: 10px; margin-top: 16px;">
+            <el-button
+              type="primary"
+              :loading="compareKeywordLoading"
+              :disabled="!selectedCompareKeyword || selectedRows.length < 2 || selectedRows.length > 3"
+              @click="compareByKeyword"
+            >
+              比对关键词
+            </el-button>
+
+            <el-button @click="compareVisible = false">关闭</el-button>
+          </div>
+
+          <div style="margin-top: 18px; color:#999; font-size:12px; line-height:1.6">
+            当前已选报告：{{ selectedRows.length }} 份<br />
+            支持 2 ~ 3 份报告；后端按所选关键词生成对比 PDF。
+          </div>
+        </div>
+      </div>
+    </el-dialog>
+
+    <!-- 关键词比对结果 -->
+    <el-dialog
+      v-model="comparePdfVisible"
+      title="关键词比对结果"
+      width="92%"
+      top="3vh"
+      :destroy-on-close="true"
+      @closed="cleanupComparePdf"
+    >
+      <div style="height: 84vh">
+        <iframe
+          v-if="comparePdfUrl"
+          :src="comparePdfUrl"
+          style="width: 100%; height: 100%; border: 0"
+        />
+        <div v-else style="color:#999">暂无比对结果</div>
       </div>
 
       <template #footer>
-        <el-button @click="compareVisible = false">关闭</el-button>
+        <el-button @click="comparePdfVisible = false">关闭</el-button>
       </template>
     </el-dialog>
 
+    <!-- 更新状态对话框 -->
     <el-dialog
       v-model="statusDialogVisible"
       title="更新报告状态"
@@ -314,6 +382,7 @@ import {
   apiSearchReportsByKeywords,
   apiReportFileBlob,
   apiReportPreviewBlob,
+  apiCompareReportsByKeyword,
   apiQueryModelSpecs,
   apiQueryComponentCategories,
   apiQueryManufacturers,
@@ -397,6 +466,12 @@ const downloadLoadingId = ref<number | null>(null)
 const compareVisible = ref(false)
 const compareItems = ref<CompareItem[]>([])
 const compareUrlsToRevoke = ref<string[]>([])
+
+const selectedCompareKeyword = ref('')
+const compareKeywordLoading = ref(false)
+const comparePdfVisible = ref(false)
+const comparePdfUrl = ref('')
+let comparePdfUrlToRevoke: string | null = null
 
 const statusDialogVisible = ref(false)
 const statusUpdating = ref(false)
@@ -550,6 +625,15 @@ function cleanupCompare() {
   }
   compareUrlsToRevoke.value = []
   compareItems.value = []
+  selectedCompareKeyword.value = ''
+}
+
+function cleanupComparePdf() {
+  if (comparePdfUrlToRevoke) {
+    URL.revokeObjectURL(comparePdfUrlToRevoke)
+    comparePdfUrlToRevoke = null
+  }
+  comparePdfUrl.value = ''
 }
 
 function buildPreviewWindowUrl(reportId: number | string, keywords?: string[]) {
@@ -563,6 +647,8 @@ function buildPreviewWindowUrl(reportId: number | string, keywords?: string[]) {
   return qs ? `/report-preview/${reportId}?${qs}` : `/report-preview/${reportId}`
 }
 
+const keywordOptionsForCompare = ref<string[]>([])
+
 onMounted(loadCategories)
 
 watch(searchMode, () => {
@@ -572,6 +658,7 @@ watch(searchMode, () => {
   selectedRows.value = []
   cleanupPreview()
   cleanupCompare()
+  cleanupComparePdf()
 
   if (searchMode.value !== 'advanced') {
     query.categoryId = null
@@ -594,6 +681,17 @@ watch(searchMode, () => {
     query.reportNo = ''
   }
 })
+
+watch(
+  () => query.keywords,
+  () => {
+    keywordOptionsForCompare.value = [...query.keywords]
+    if (!keywordOptionsForCompare.value.includes(selectedCompareKeyword.value)) {
+      selectedCompareKeyword.value = ''
+    }
+  },
+  { deep: true },
+)
 
 const onCategoryChange = async () => {
   if (!query.categoryId) {
@@ -703,6 +801,8 @@ const resetForm = () => {
   query.batchNumber = ''
   query.keywords = []
   keywordOptions.value = []
+  keywordOptionsForCompare.value = []
+  selectedCompareKeyword.value = ''
 
   options.modelSpecs = []
   options.componentCategories = []
@@ -716,6 +816,7 @@ const resetForm = () => {
 
   cleanupPreview()
   cleanupCompare()
+  cleanupComparePdf()
 }
 
 const onSelectionChange = (rows: ReportRow[]) => {
@@ -824,6 +925,11 @@ const openCompare = async () => {
     loading: true,
   }))
 
+  keywordOptionsForCompare.value = [...query.keywords]
+  if (!selectedCompareKeyword.value && keywordOptionsForCompare.value.length > 0) {
+    selectedCompareKeyword.value = keywordOptionsForCompare.value[0]
+  }
+
   await Promise.all(
     compareItems.value.map(async (it) => {
       try {
@@ -838,12 +944,46 @@ const openCompare = async () => {
     }),
   )
 }
+
+const compareByKeyword = async () => {
+  const keyword = selectedCompareKeyword.value.trim()
+  if (!keyword) return ElMessage.warning('请选择一个关键词')
+  if (selectedRows.value.length < 2 || selectedRows.value.length > 3) {
+    return ElMessage.warning('请选择 2 或 3 份报告进行对比')
+  }
+
+  compareKeywordLoading.value = true
+  try {
+    const reportIds = selectedRows.value.slice(0, 3).map((r) => r.reportId)
+
+    const res = await apiCompareReportsByKeyword({
+      reportIds,
+      keyword,
+    })
+
+    const pdfBlob = new Blob([res.blob], { type: 'application/pdf' })
+    const url = URL.createObjectURL(pdfBlob)
+
+    if (comparePdfUrlToRevoke) {
+      URL.revokeObjectURL(comparePdfUrlToRevoke)
+    }
+    comparePdfUrlToRevoke = url
+    comparePdfUrl.value = url
+    comparePdfVisible.value = true
+  } catch (e: unknown) {
+    ElMessage.error(e instanceof Error ? e.message : '关键词比对失败')
+  } finally {
+    compareKeywordLoading.value = false
+  }
+}
 </script>
 
 <style scoped>
 .compare {
   display: grid;
   gap: 12px;
+  flex: 1;
+  min-width: 0;
   height: 84vh;
 }
 
@@ -870,5 +1010,40 @@ const openCompare = async () => {
   height: 100%;
   border: 0;
   flex: 1;
+}
+
+.keyword-panel {
+  width: 320px;
+  border: 1px solid #ebeef5;
+  background: #fff;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.keyword-panel__title {
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.keyword-tag-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-height: 55vh;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.keyword-tag {
+  cursor: pointer;
+  user-select: none;
+  transition: all 0.2s ease;
+}
+
+.keyword-tag:hover {
+  transform: translateY(-1px);
+  opacity: 0.92;
 }
 </style>

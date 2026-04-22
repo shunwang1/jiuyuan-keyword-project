@@ -8,6 +8,7 @@
 // - 文件预览（原生 fetch 获取 pdf blob + headers）
 // - 报告状态更新
 // - 报告关键词刷新
+// - 关键词对比生成PDF
 // - 上传页下拉 query/add/delete
 
 import { request, type BlobResponse, JWT_TOKEN_LS_KEY } from './http'
@@ -85,6 +86,11 @@ export interface SearchByKeywordsParams {
   keywords: string[]
   page: number
   pageSize: number
+}
+
+export interface CompareByKeywordParams {
+  reportIds: Array<number | string>
+  keyword: string
 }
 
 function readToken(): string | null {
@@ -234,6 +240,72 @@ export async function apiReportPreviewBlob(
       // ignore
     }
 
+    throw new Error(message)
+  }
+
+  const blob = await resp.blob()
+
+  return {
+    blob,
+    headers: resp.headers,
+    status: resp.status,
+  }
+}
+
+/**
+ * 关键词对比生成PDF
+ * POST /api/v1/reports/compare-by-keyword
+ *
+ * 推荐新格式：
+ * {
+ *   reportIds: [1,2,3],
+ *   keyword: '光耦合器'
+ * }
+ *
+ * 兼容旧格式：
+ * {
+ *   leftReportId: 1,
+ *   rightReportId: 2,
+ *   keyword: '光耦合器'
+ * }
+ */
+export async function apiCompareReportsByKeyword(
+  params:
+    | CompareByKeywordParams
+    | {
+        leftReportId: number | string
+        rightReportId: number | string
+        keyword: string
+      },
+): Promise<BlobResponse> {
+  const token = readToken()
+
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  }
+  if (token) headers.token = token
+
+  const resp = await fetch('/api/v1/reports/compare-by-keyword', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(params),
+  })
+
+  const contentType = resp.headers.get('content-type') || ''
+
+  if (!resp.ok) {
+    let message = `HTTP ${resp.status}`
+    try {
+      if (contentType.includes('application/json')) {
+        const payload = await resp.json()
+        message = payload?.msg || payload?.message || message
+      } else {
+        const text = await resp.text()
+        if (text) message = text
+      }
+    } catch {
+      // ignore
+    }
     throw new Error(message)
   }
 
