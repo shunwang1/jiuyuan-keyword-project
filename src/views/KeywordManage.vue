@@ -4,14 +4,6 @@
       <div style="font-weight: 700">关键词管理</div>
     </template>
 
-    <div style="padding: 8px 0">
-      <el-alert title="提示" type="warning" :closable="false" show-icon>
-        <template #default>
-          该页面通常仅管理员可用；若当前账号无权限，后端将返回 403 并提示“无权限”。
-        </template>
-      </el-alert>
-    </div>
-
     <div style="margin-bottom: 12px">
       <el-form label-width="70px" style="max-width: 720px">
         <el-form-item label="报告类别">
@@ -107,11 +99,6 @@
       </el-table-column>
     </el-table>
 
-    <div style="margin-top: 10px; color: #999; font-size: 12px">
-      对齐后端：category 一律使用数字 ID；新增/修改使用 urlencoded；删除使用 DELETE +
-      querystring；刷新关键词使用 POST /reports/refresh-keywords。
-    </div>
-
     <el-dialog v-model="editVisible" title="修改关键词" width="520px">
       <el-form label-width="110px">
         <el-form-item label="原关键词">
@@ -144,7 +131,6 @@ import {
 
 type KeywordRow = { keyword: string }
 type CategoryRow = { id: number; category: string }
-
 type RefreshStatusType = 'info' | 'success'
 
 const categories = ref<CategoryRow[]>([])

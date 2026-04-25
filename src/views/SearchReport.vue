@@ -1,7 +1,7 @@
 <template>
   <el-card>
     <template #header>
-      <div style="font-weight:700">检索报告</div>
+      <div style="font-weight: 700">检索报告</div>
     </template>
 
     <el-form label-width="110px" style="max-width: 980px">
@@ -34,9 +34,6 @@
         >
           <el-option v-for="c in categories" :key="c.id" :label="c.category" :value="c.id" />
         </el-select>
-        <div style="color:#999; font-size:12px; margin-left: 12px">
-          类别不再强制；如果选择类别，系统会自动加载厂家/门类/型号规格/批号候选项
-        </div>
       </el-form-item>
 
       <el-form-item v-if="searchMode === 'advanced'" label="厂家信息">
@@ -114,7 +111,6 @@
       <el-form-item>
         <el-button type="primary" :loading="loadingSearch" @click="doSearch(true)">检索</el-button>
         <el-button :disabled="loadingSearch" @click="resetForm">重置</el-button>
-
         <el-button
           type="success"
           :disabled="selectedRows.length < 2 || selectedRows.length > 3"
@@ -122,18 +118,6 @@
         >
           对比（已选 {{ selectedRows.length }}）
         </el-button>
-
-        <div style="color:#999; font-size:12px; margin-top: 6px">
-          <template v-if="searchMode === 'reportNo'">
-            通过报告编号全库模糊检索，不需要选择类别。
-          </template>
-          <template v-else-if="searchMode === 'keywords'">
-            直接按关键词全库检索，不需要选择类别；多个关键词之间为 AND 关系。
-          </template>
-          <template v-else>
-            可选择类别后进一步筛选厂家/门类/型号规格/批号，也可仅按关键词检索。
-          </template>
-        </div>
       </el-form-item>
     </el-form>
 
@@ -202,14 +186,12 @@
           >
             下载
           </el-button>
-          <el-button type="primary" link @click="openStatusDialog(row)">
-            更新状态
-          </el-button>
+          <el-button type="primary" link @click="openStatusDialog(row)">更新状态</el-button>
         </template>
       </el-table-column>
     </el-table>
 
-    <div style="display:flex; justify-content:flex-end; margin-top: 12px">
+    <div style="display: flex; justify-content: flex-end; margin-top: 12px">
       <el-pagination
         layout="prev, pager, next"
         :page-size="page.pageSize"
@@ -219,7 +201,6 @@
       />
     </div>
 
-    <!-- 单份预览 -->
     <el-dialog
       v-model="previewVisible"
       title="报告预览"
@@ -229,12 +210,8 @@
       @closed="cleanupPreview"
     >
       <div style="height: 82vh">
-        <iframe
-          v-if="previewUrl"
-          :src="previewUrl"
-          style="width: 100%; height: 100%; border: 0"
-        />
-        <div v-else style="color:#999">暂无可预览内容</div>
+        <iframe v-if="previewUrl" :src="previewUrl" style="width: 100%; height: 100%; border: 0" />
+        <div v-else style="color: #999">暂无可预览内容</div>
       </div>
 
       <template #footer>
@@ -242,7 +219,6 @@
       </template>
     </el-dialog>
 
-    <!-- 对比预览 -->
     <el-dialog
       v-model="compareVisible"
       title="报告对比预览"
@@ -251,31 +227,20 @@
       :destroy-on-close="true"
       @closed="cleanupCompare"
     >
-      <div style="display:flex; gap: 12px; height: 84vh;">
-        <div
-          class="compare"
-          :style="{ gridTemplateColumns: `repeat(${compareItems.length || 1}, 1fr)` }"
-        >
+      <div style="display: flex; gap: 12px; height: 84vh">
+        <div class="compare" :style="{ gridTemplateColumns: `repeat(${compareItems.length || 1}, 1fr)` }">
           <div v-for="it in compareItems" :key="it.reportId" class="compare__col">
             <div class="compare__title" :title="it.fileName">{{ it.fileName }}</div>
-            <div v-if="it.loading" style="padding: 10px; color:#999">加载中...</div>
-            <iframe
-              v-else-if="it.url"
-              :src="it.url"
-              class="compare__iframe"
-            />
-            <div v-else style="padding: 12px; color:#999">暂无可预览内容</div>
+            <div v-if="it.loading" style="padding: 10px; color: #999">加载中...</div>
+            <iframe v-else-if="it.url" :src="it.url" class="compare__iframe" />
+            <div v-else style="padding: 12px; color: #999">暂无可预览内容</div>
           </div>
         </div>
 
         <div class="keyword-panel">
           <div class="keyword-panel__title">比对关键词</div>
 
-          <div style="color:#999; font-size: 12px; margin-bottom: 8px;">
-            请选择一个当前检索关键词进行比对
-          </div>
-
-          <div v-if="keywordOptionsForCompare.length === 0" style="color:#999; padding: 8px 0;">
+          <div v-if="keywordOptionsForCompare.length === 0" style="color: #999; padding: 8px 0">
             当前没有可用关键词，请先在检索条件中选择关键词
           </div>
 
@@ -293,7 +258,7 @@
             </el-tag>
           </div>
 
-          <div style="display:flex; gap: 10px; margin-top: 16px;">
+          <div style="display: flex; gap: 10px; margin-top: 16px">
             <el-button
               type="primary"
               :loading="compareKeywordLoading"
@@ -305,16 +270,10 @@
 
             <el-button @click="compareVisible = false">关闭</el-button>
           </div>
-
-          <div style="margin-top: 18px; color:#999; font-size:12px; line-height:1.6">
-            当前已选报告：{{ selectedRows.length }} 份<br />
-            支持 2 ~ 3 份报告；后端按所选关键词生成对比 PDF。
-          </div>
         </div>
       </div>
     </el-dialog>
 
-    <!-- 关键词比对结果 -->
     <el-dialog
       v-model="comparePdfVisible"
       title="关键词比对结果"
@@ -324,12 +283,8 @@
       @closed="cleanupComparePdf"
     >
       <div style="height: 84vh">
-        <iframe
-          v-if="comparePdfUrl"
-          :src="comparePdfUrl"
-          style="width: 100%; height: 100%; border: 0"
-        />
-        <div v-else style="color:#999">暂无比对结果</div>
+        <iframe v-if="comparePdfUrl" :src="comparePdfUrl" style="width: 100%; height: 100%; border: 0" />
+        <div v-else style="color: #999">暂无比对结果</div>
       </div>
 
       <template #footer>
@@ -337,7 +292,6 @@
       </template>
     </el-dialog>
 
-    <!-- 更新状态对话框 -->
     <el-dialog
       v-model="statusDialogVisible"
       title="更新报告状态"
@@ -349,11 +303,7 @@
           <span>{{ statusLabel(statusForm.currentStatus) || '未知' }}</span>
         </el-form-item>
         <el-form-item label="新状态" required>
-          <el-select
-            v-model="statusForm.newStatus"
-            placeholder="请选择新状态"
-            style="width: 260px"
-          >
+          <el-select v-model="statusForm.newStatus" placeholder="请选择新状态" style="width: 260px">
             <el-option :value="1001" label="1001 待处理" />
             <el-option :value="1002" label="1002 已通过" />
             <el-option :value="1003" label="1003 已拒绝" />
@@ -363,9 +313,7 @@
 
       <template #footer>
         <el-button @click="statusDialogVisible = false">取消</el-button>
-        <el-button type="primary" :loading="statusUpdating" @click="submitStatusUpdate">
-          确定
-        </el-button>
+        <el-button type="primary" :loading="statusUpdating" @click="submitStatusUpdate">确定</el-button>
       </template>
     </el-dialog>
   </el-card>
@@ -377,20 +325,20 @@ import { ElMessage } from 'element-plus'
 import { request } from '../api/http'
 import { apiQueryAllKeywords } from '../api/keywords'
 import {
-  apiSearchReports,
-  apiSearchReportsByReportNo,
-  apiSearchReportsByKeywords,
-  apiReportFileBlob,
-  apiReportPreviewBlob,
   apiCompareReportsByKeyword,
-  apiQueryModelSpecs,
+  apiQueryBatchNumbers,
   apiQueryComponentCategories,
   apiQueryManufacturers,
-  apiQueryBatchNumbers,
+  apiQueryModelSpecs,
+  apiReportFileBlob,
+  apiReportPreviewBlob,
+  apiSearchReports,
+  apiSearchReportsByKeywords,
+  apiSearchReportsByReportNo,
   apiUpdateReportStatus,
   type ReportListItem,
-  type SearchReportsResponseData,
   type ReportStatusCode,
+  type SearchReportsResponseData,
 } from '../api/reports'
 
 type CategoryRow = { id: number; category: string }
@@ -485,18 +433,18 @@ const statusForm = reactive<{
   newStatus: null,
 })
 
-const categoryNameById = (v: unknown) => {
-  const n = typeof v === 'number' ? v : Number(v)
-  const hit = categories.value.find((x) => x.id === n)
-  return hit?.category ?? (v == null ? '' : String(v))
+const categoryNameById = (value: unknown) => {
+  const id = typeof value === 'number' ? value : Number(value)
+  const hit = categories.value.find((item) => item.id === id)
+  return hit?.category ?? (value == null ? '' : String(value))
 }
 
-const statusLabel = (v: unknown) => {
-  const n = typeof v === 'number' ? v : Number(v)
-  if (n === 1001) return '待处理'
-  if (n === 1002) return '已通过'
-  if (n === 1003) return '已拒绝'
-  return v == null ? '' : String(v)
+const statusLabel = (value: unknown) => {
+  const code = typeof value === 'number' ? value : Number(value)
+  if (code === 1001) return '待处理'
+  if (code === 1002) return '已通过'
+  if (code === 1003) return '已拒绝'
+  return value == null ? '' : String(value)
 }
 
 function normalizeRow(raw: any): ReportRow {
@@ -513,7 +461,6 @@ function normalizeRow(raw: any): ReportRow {
     address: raw?.address,
     status: raw?.status,
     createdAt: raw?.createdAt ?? raw?.uploadTime,
-
     componentCategory: raw?.componentCategory,
     manufacturerName: raw?.manufacturerName,
     manufacture: raw?.manufacture,
@@ -546,8 +493,11 @@ async function loadCategories() {
   try {
     const data = await request<any[]>('/categories/query', { method: 'GET' })
     categories.value = (data || [])
-      .map((x) => ({ id: Number(x?.id), category: String(x?.category ?? x?.name ?? '') }))
-      .filter((x) => Number.isFinite(x.id) && x.category)
+      .map((item) => ({
+        id: Number(item?.id),
+        category: String(item?.category ?? item?.name ?? ''),
+      }))
+      .filter((item) => Number.isFinite(item.id) && item.category)
   } catch (e: unknown) {
     ElMessage.error(e instanceof Error ? e.message : '加载类别失败')
   } finally {
@@ -572,16 +522,16 @@ async function loadDependents(categoryId: number) {
   loadingOptions.batchNumbers = true
 
   try {
-    const [ms, cc, mf, bn] = await Promise.all([
+    const [modelSpecs, componentCategories, manufacturers, batchNumbers] = await Promise.all([
       apiQueryModelSpecs(categoryId),
       apiQueryComponentCategories(categoryId),
       apiQueryManufacturers(categoryId),
       apiQueryBatchNumbers(categoryId),
     ])
-    options.modelSpecs = ms
-    options.componentCategories = cc
-    options.manufacturers = mf
-    options.batchNumbers = bn
+    options.modelSpecs = modelSpecs
+    options.componentCategories = componentCategories
+    options.manufacturers = manufacturers
+    options.batchNumbers = batchNumbers
   } catch (e: unknown) {
     ElMessage.error(e instanceof Error ? e.message : '加载下拉选项失败')
   } finally {
@@ -594,14 +544,9 @@ async function loadDependents(categoryId: number) {
 
 async function getDownloadResource(reportId: number | string) {
   const res = await apiReportFileBlob(reportId)
-  const disposition =
-    res.headers.get('content-disposition') ||
-    res.headers.get('Content-Disposition') ||
-    ''
-
+  const disposition = res.headers.get('content-disposition') || res.headers.get('Content-Disposition') || ''
   const fileName = parseDownloadFileName(disposition)
   const blob = new Blob([res.blob])
-
   return { blob, fileName }
 }
 
@@ -620,8 +565,8 @@ function cleanupPreview() {
 }
 
 function cleanupCompare() {
-  for (const u of compareUrlsToRevoke.value) {
-    URL.revokeObjectURL(u)
+  for (const url of compareUrlsToRevoke.value) {
+    URL.revokeObjectURL(url)
   }
   compareUrlsToRevoke.value = []
   compareItems.value = []
@@ -638,13 +583,13 @@ function cleanupComparePdf() {
 
 function buildPreviewWindowUrl(reportId: number | string, keywords?: string[]) {
   const params = new URLSearchParams()
-  for (const kw of keywords || []) {
-    const s = (kw ?? '').toString().trim()
-    if (s) params.append('keyword', s)
+  for (const keyword of keywords || []) {
+    const value = String(keyword ?? '').trim()
+    if (value) params.append('keyword', value)
   }
 
-  const qs = params.toString()
-  return qs ? `/report-preview/${reportId}?${qs}` : `/report-preview/${reportId}`
+  const queryString = params.toString()
+  return queryString ? `/report-preview/${reportId}?${queryString}` : `/report-preview/${reportId}`
 }
 
 const keywordOptionsForCompare = ref<string[]>([])
@@ -859,12 +804,12 @@ const downloadReport = async (row: ReportRow) => {
   try {
     const { blob, fileName } = await getDownloadResource(row.reportId)
     const url = window.URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = fileName
-    document.body.appendChild(a)
-    a.click()
-    a.remove()
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = fileName
+    document.body.appendChild(anchor)
+    anchor.click()
+    anchor.remove()
     window.URL.revokeObjectURL(url)
   } catch (e: unknown) {
     ElMessage.error(e instanceof Error ? e.message : '下载失败')
@@ -897,7 +842,7 @@ const submitStatusUpdate = async () => {
     await apiUpdateReportStatus({ id: statusForm.reportId, status: statusForm.newStatus })
     ElMessage.success('状态更新成功')
 
-    const target = result.value.find((r) => r.reportId === statusForm.reportId)
+    const target = result.value.find((row) => row.reportId === statusForm.reportId)
     if (target) {
       target.status = statusForm.newStatus
     }
@@ -918,9 +863,9 @@ const openCompare = async () => {
   cleanupCompare()
   compareVisible.value = true
 
-  compareItems.value = selectedRows.value.slice(0, 3).map((r) => ({
-    reportId: r.reportId,
-    fileName: r.fileName,
+  compareItems.value = selectedRows.value.slice(0, 3).map((row) => ({
+    reportId: row.reportId,
+    fileName: row.fileName,
     url: '',
     loading: true,
   }))
@@ -931,15 +876,15 @@ const openCompare = async () => {
   }
 
   await Promise.all(
-    compareItems.value.map(async (it) => {
+    compareItems.value.map(async (item) => {
       try {
-        const url = await getPreviewUrlByReportId(it.reportId, query.keywords)
-        it.url = url
-        it.loading = false
+        const url = await getPreviewUrlByReportId(item.reportId, query.keywords)
+        item.url = url
+        item.loading = false
         compareUrlsToRevoke.value.push(url)
       } catch {
-        it.url = ''
-        it.loading = false
+        item.url = ''
+        item.loading = false
       }
     }),
   )
@@ -954,7 +899,7 @@ const compareByKeyword = async () => {
 
   compareKeywordLoading.value = true
   try {
-    const reportIds = selectedRows.value.slice(0, 3).map((r) => r.reportId)
+    const reportIds = selectedRows.value.slice(0, 3).map((row) => row.reportId)
 
     const res = await apiCompareReportsByKeyword({
       reportIds,

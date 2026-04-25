@@ -1,7 +1,7 @@
 <template>
   <el-card>
     <template #header>
-      <div style="font-weight:700">元器件报告上传</div>
+      <div style="font-weight: 700">元器件报告上传</div>
     </template>
 
     <el-form label-width="120px" style="max-width: 900px">
@@ -21,12 +21,7 @@
       </el-form-item>
 
       <el-form-item label="报告编号" required>
-        <el-input
-          v-model="form.reportNo"
-          placeholder="请输入报告编号"
-          style="width: 460px"
-          clearable
-        />
+        <el-input v-model="form.reportNo" placeholder="请输入报告编号" style="width: 460px" clearable />
       </el-form-item>
 
       <el-form-item label="厂家信息">
@@ -43,12 +38,7 @@
             <el-option v-for="x in manufacturers" :key="x" :label="x" :value="x" />
           </el-select>
 
-          <el-button
-            type="primary"
-            plain
-            :disabled="!form.categoryId"
-            @click="openAdd('manufacturerName')"
-          >
+          <el-button type="primary" plain :disabled="!form.categoryId" @click="openAdd('manufacturerName')">
             增加
           </el-button>
 
@@ -79,12 +69,7 @@
             <el-option v-for="x in componentCategories" :key="x" :label="x" :value="x" />
           </el-select>
 
-          <el-button
-            type="primary"
-            plain
-            :disabled="!form.categoryId"
-            @click="openAdd('componentCategory')"
-          >
+          <el-button type="primary" plain :disabled="!form.categoryId" @click="openAdd('componentCategory')">
             增加
           </el-button>
 
@@ -165,20 +150,11 @@
 
       <el-form-item label="上传文件" required>
         <input type="file" accept=".pdf,.doc,.docx" @change="onFileChange" />
-        <div style="color:#999; font-size:12px; margin-top:6px">
-          必须选择文件（File 类型），文件名重复后端会拒绝上传
-        </div>
       </el-form-item>
 
       <el-form-item>
         <el-button type="primary" :loading="uploading" @click="onUpload">上传</el-button>
       </el-form-item>
-
-      <div style="color:#999; font-size:12px; line-height:1.6">
-        必填：category / reportNo / modelSpec / componentCategory / file；<br />
-        可选：manufacturerName / batchNumber。<br />
-        新增：普通用户可用；删除：管理员按钮可见（后端也会校验）。
-      </div>
     </el-form>
 
     <el-dialog v-model="addDialog.visible" :title="addDialogTitle" width="560px">
@@ -202,20 +178,20 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import type { RequestError } from '../api/http'
 import { useAuthStore } from '../stores/auth'
 import {
-  apiUploadReport,
+  apiAddBatchNumber,
+  apiAddComponentCategory,
+  apiAddManufacturer,
+  apiAddModelSpec,
+  apiDeleteBatchNumber,
+  apiDeleteComponentCategory,
+  apiDeleteManufacturer,
+  apiDeleteModelSpec,
+  apiQueryBatchNumbers,
   apiQueryCategories,
-  apiQueryModelSpecs,
   apiQueryComponentCategories,
   apiQueryManufacturers,
-  apiQueryBatchNumbers,
-  apiAddModelSpec,
-  apiDeleteModelSpec,
-  apiAddComponentCategory,
-  apiDeleteComponentCategory,
-  apiAddManufacturer,
-  apiDeleteManufacturer,
-  apiAddBatchNumber,
-  apiDeleteBatchNumber,
+  apiQueryModelSpecs,
+  apiUploadReport,
   type CategoryItem,
 } from '../api/reports'
 
@@ -365,33 +341,33 @@ function openAdd(field: FieldKey) {
 
 async function submitAdd() {
   if (!form.categoryId) return ElMessage.warning('请先选择报告类别')
-  const v = addDialog.value.trim()
-  if (!v) return ElMessage.warning('请输入新值')
+  const value = addDialog.value.trim()
+  if (!value) return ElMessage.warning('请输入新值')
 
   addDialog.loading = true
   try {
     const categoryId = form.categoryId
 
     if (addDialog.field === 'modelSpec') {
-      await apiAddModelSpec({ categoryId, modelSpec: v })
+      await apiAddModelSpec({ categoryId, modelSpec: value })
       ElMessage.success('新增成功')
       modelSpecs.value = await apiQueryModelSpecs(categoryId)
-      form.modelSpec = v
+      form.modelSpec = value
     } else if (addDialog.field === 'componentCategory') {
-      await apiAddComponentCategory({ categoryId, componentCategory: v })
+      await apiAddComponentCategory({ categoryId, componentCategory: value })
       ElMessage.success('新增成功')
       componentCategories.value = await apiQueryComponentCategories(categoryId)
-      form.componentCategory = v
+      form.componentCategory = value
     } else if (addDialog.field === 'manufacturerName') {
-      await apiAddManufacturer({ categoryId, manufacturerName: v })
+      await apiAddManufacturer({ categoryId, manufacturerName: value })
       ElMessage.success('新增成功')
       manufacturers.value = await apiQueryManufacturers(categoryId)
-      form.manufacturerName = v
+      form.manufacturerName = value
     } else if (addDialog.field === 'batchNumber') {
-      await apiAddBatchNumber({ categoryId, batchNumber: v })
+      await apiAddBatchNumber({ categoryId, batchNumber: value })
       ElMessage.success('新增成功')
       batchNumbers.value = await apiQueryBatchNumbers(categoryId)
-      form.batchNumber = v
+      form.batchNumber = value
     }
 
     addDialog.visible = false
@@ -409,38 +385,38 @@ async function onDelete(field: FieldKey) {
 
   try {
     if (field === 'modelSpec') {
-      const v = form.modelSpec.trim()
-      if (!v) return ElMessage.warning('请选择要删除的型号规格')
-      await ElMessageBox.confirm(`确定删除型号规格「${v}」吗？`, '提示', { type: 'warning' })
+      const value = form.modelSpec.trim()
+      if (!value) return ElMessage.warning('请选择要删除的型号规格')
+      await ElMessageBox.confirm(`确定删除型号规格「${value}」吗？`, '提示', { type: 'warning' })
       deleting.modelSpec = true
-      await apiDeleteModelSpec({ categoryId, modelSpec: v })
+      await apiDeleteModelSpec({ categoryId, modelSpec: value })
       ElMessage.success('删除成功')
       modelSpecs.value = await apiQueryModelSpecs(categoryId)
       form.modelSpec = ''
     } else if (field === 'componentCategory') {
-      const v = form.componentCategory.trim()
-      if (!v) return ElMessage.warning('请选择要删除的门类')
-      await ElMessageBox.confirm(`确定删除门类「${v}」吗？`, '提示', { type: 'warning' })
+      const value = form.componentCategory.trim()
+      if (!value) return ElMessage.warning('请选择要删除的门类')
+      await ElMessageBox.confirm(`确定删除门类「${value}」吗？`, '提示', { type: 'warning' })
       deleting.componentCategory = true
-      await apiDeleteComponentCategory({ categoryId, componentCategory: v })
+      await apiDeleteComponentCategory({ categoryId, componentCategory: value })
       ElMessage.success('删除成功')
       componentCategories.value = await apiQueryComponentCategories(categoryId)
       form.componentCategory = ''
     } else if (field === 'manufacturerName') {
-      const v = form.manufacturerName.trim()
-      if (!v) return ElMessage.warning('请选择要删除的厂家')
-      await ElMessageBox.confirm(`确定删除厂家「${v}」吗？`, '提示', { type: 'warning' })
+      const value = form.manufacturerName.trim()
+      if (!value) return ElMessage.warning('请选择要删除的厂家')
+      await ElMessageBox.confirm(`确定删除厂家「${value}」吗？`, '提示', { type: 'warning' })
       deleting.manufacturerName = true
-      await apiDeleteManufacturer({ categoryId, manufacturerName: v })
+      await apiDeleteManufacturer({ categoryId, manufacturerName: value })
       ElMessage.success('删除成功')
       manufacturers.value = await apiQueryManufacturers(categoryId)
       form.manufacturerName = ''
     } else if (field === 'batchNumber') {
-      const v = form.batchNumber.trim()
-      if (!v) return ElMessage.warning('请选择要删除的批号')
-      await ElMessageBox.confirm(`确定删除批号「${v}」吗？`, '提示', { type: 'warning' })
+      const value = form.batchNumber.trim()
+      if (!value) return ElMessage.warning('请选择要删除的批号')
+      await ElMessageBox.confirm(`确定删除批号「${value}」吗？`, '提示', { type: 'warning' })
       deleting.batchNumber = true
-      await apiDeleteBatchNumber({ categoryId, batchNumber: v })
+      await apiDeleteBatchNumber({ categoryId, batchNumber: value })
       ElMessage.success('删除成功')
       batchNumbers.value = await apiQueryBatchNumbers(categoryId)
       form.batchNumber = ''
@@ -461,7 +437,7 @@ const onUpload = async () => {
   if (!form.reportNo.trim()) return ElMessage.warning('请输入报告编号')
   if (!form.componentCategory.trim()) return ElMessage.warning('请选择元器件门类')
   if (!form.modelSpec.trim()) return ElMessage.warning('请选择型号规格')
-  if (!fileRef.value) return ElMessage.warning('请选择要上传的文件（File）')
+  if (!fileRef.value) return ElMessage.warning('请选择要上传的文件')
 
   uploading.value = true
   try {

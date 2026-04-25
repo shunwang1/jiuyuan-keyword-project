@@ -1,18 +1,15 @@
 <template>
   <div class="page">
-    <!-- 左上角logo区（Logo + 系统名） -->
     <div class="brand">
       <img class="brand__logo" :src="logoUrl" alt="logo" />
       <div class="brand__title">元器件物理状态信息系统</div>
     </div>
 
-    <!-- 登录界面 -->
     <el-card class="card">
       <template #header>
-        <div style="font-weight:700; font-size:16px">欢迎登录</div>
+        <div style="font-weight: 700; font-size: 16px">欢迎登录</div>
       </template>
 
-      <!-- 新增：来自 http.ts redirect 的提示原因 -->
       <el-alert
         v-if="reasonText"
         :title="reasonText"
@@ -33,15 +30,11 @@
         </el-form-item>
 
         <el-form-item>
-          <el-button type="primary" :loading="loading" style="width:100%" @click="onLogin">
+          <el-button type="primary" :loading="loading" style="width: 100%" @click="onLogin">
             登录
           </el-button>
         </el-form-item>
       </el-form>
-
-      <div style="color:#999; font-size:12px; line-height: 1.6">
-        说明：登录成功后后端返回 JWT；前端保存 token，并在后续请求头中携带 <code>token</code> 进行鉴权。
-      </div>
     </el-card>
   </div>
 </template>
@@ -66,25 +59,20 @@ const form = reactive({
   password: '',
 })
 
-/** Logo 图片地址
- *  - 放到：src/assets/logo.png
- */
 const logoUrl = new URL('../assets/logo.png', import.meta.url).href
 
 onMounted(() => {
-  // 显示由 http.ts redirectToLogin(reason) 带来的原因
-  const r = typeof route.query.reason === 'string' ? route.query.reason : ''
-  if (r) {
-    reasonText.value = r
+  const reason = typeof route.query.reason === 'string' ? route.query.reason : ''
+  if (!reason) return
 
-    // 清理 URL 参数，避免刷新仍然提示（不新增历史记录）
-    router.replace({ path: '/login', query: {} })
-  }
+  reasonText.value = reason
+  router.replace({ path: '/login', query: {} })
 })
 
 const onLogin = async () => {
   const username = form.username.trim()
   const password = form.password.trim()
+
   if (!username) return ElMessage.warning('请输入账号')
   if (!password) return ElMessage.warning('请输入密码')
 
@@ -112,7 +100,6 @@ const onLogin = async () => {
   position: relative;
 }
 
-/* 左上角logo区 */
 .brand {
   position: absolute;
   top: 16px;
@@ -134,7 +121,6 @@ const onLogin = async () => {
   font-size: 16px;
 }
 
-/* 登录卡片 */
 .card {
   width: 420px;
 }
