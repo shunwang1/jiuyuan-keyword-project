@@ -55,6 +55,9 @@
             已耗时 {{ refreshStatus.seconds }} 秒
           </span>
         </div>
+        <div v-if="refreshStatus.finishedAtText" style="margin-top: 6px; color: #909399">
+          本次刷新完成时间：{{ refreshStatus.finishedAtText }}
+        </div>
       </template>
     </el-alert>
 
@@ -81,8 +84,8 @@
     <el-table
       :data="filteredKeywords"
       style="width: 100%"
-      v-loading="tableLoading"
-      element-loading-text="正在加载关键词列表或匹配报告，请稍候..."
+      v-loading="loadingKeywords"
+      element-loading-text="正在加载关键词列表，请稍候..."
     >
       <el-table-column prop="keyword" label="关键词" />
       <el-table-column label="操作" width="160">
@@ -172,12 +175,14 @@ const refreshStatus = reactive<{
   title: string
   message: string
   seconds: number
+  finishedAtText: string
 }>({
   visible: false,
   type: 'info',
   title: '',
   message: '',
   seconds: 0,
+  finishedAtText: '',
 })
 
 let refreshTimer: number | null = null
@@ -186,8 +191,6 @@ let refreshStatusHideTimer: number | null = null
 const refreshUiBusy = computed(
   () => refreshing.value || adding.value || editing.value || Boolean(removingKey.value),
 )
-
-const tableLoading = computed(() => loadingKeywords.value || refreshing.value)
 
 const filteredKeywords = computed(() => {
   const text = filterText.value.trim().toLowerCase()
@@ -228,10 +231,16 @@ function startRefreshStatus() {
   refreshStatus.title = '正在刷新关键词'
   refreshStatus.message = '正在将新增关键词与该分类下的报告重新匹配，请稍候。'
   refreshStatus.seconds = 0
+  refreshStatus.finishedAtText = ''
 
   refreshTimer = window.setInterval(() => {
     refreshStatus.seconds += 1
   }, 1000)
+}
+
+function formatRefreshFinishedAt(date: Date) {
+  const pad = (value: number) => String(value).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
 }
 
 function markRefreshSuccess() {
@@ -240,6 +249,7 @@ function markRefreshSuccess() {
   refreshStatus.type = 'success'
   refreshStatus.title = '刷新完成'
   refreshStatus.message = '关键词与报告的重新匹配已完成，列表已自动刷新。'
+  refreshStatus.finishedAtText = formatRefreshFinishedAt(new Date())
   hideRefreshStatusLater()
 }
 
@@ -248,6 +258,7 @@ function resetRefreshStatusOnError() {
   clearRefreshStatusHideTimer()
   refreshStatus.visible = false
   refreshStatus.seconds = 0
+  refreshStatus.finishedAtText = ''
 }
 
 function handleApiError(e: unknown, fallback: string) {
