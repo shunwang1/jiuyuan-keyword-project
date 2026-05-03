@@ -66,10 +66,11 @@ export function apiPatchUserSecurityLevel(params: { id: number; securityLevel: 0
 }
 
 export interface AuthUserItem {
+  id?: number | string
   username: string
   securityLevel: 0 | 1 | 2
   departmentId: number
-  status?: 0 | 1
+  status?: 0 | 1 | '0' | '1' | number | string
 }
 
 export interface AuthUsersQueryResponse {
@@ -86,12 +87,15 @@ export async function apiAuthUsersQuery(): Promise<AuthUsersQueryResponse> {
 }
 
 export function mapAuthUserToUserListItem(u: AuthUserItem, index: number): UserListItem {
+  const normalizedId = Number(u.id)
+  const normalizedStatus = Number(u.status)
+
   return {
-    userId: index + 1,
+    userId: Number.isFinite(normalizedId) && normalizedId > 0 ? normalizedId : index + 1,
     username: u.username,
     dept: String(u.departmentId),
     role: (u.securityLevel === 0 ? 0 : 1) as UserRole,
-    frozen: u.status === 0,
+    frozen: normalizedStatus === 0,
   }
 }
 
