@@ -21,26 +21,30 @@
         </template>
       </el-table-column>
 
-      <el-table-column label="冻结账户" width="180">
+      <el-table-column label="冻结账户" width="240">
         <template #default="{ row }">
-          <el-switch
-            v-model="row.statusCode"
-            :active-value="0"
-            :inactive-value="1"
-            active-text="冻结"
-            inactive-text="正常"
-            @change="onStatusChange(row)"
-          />
+          <div style="display: flex; align-items: center; gap: 12px">
+            <el-tag :type="isAdminRow(row) ? 'info' : row.frozen ? 'danger' : 'success'" effect="light">
+              {{ isAdminRow(row) ? '管理员账号' : row.frozen ? '已冻结' : '正常' }}
+            </el-tag>
+            <el-switch
+              :model-value="!row.frozen"
+              active-text="正常"
+              inactive-text="冻结"
+              :disabled="isAdminRow(row)"
+              @change="onStatusChange(row, $event)"
+            />
+          </div>
         </template>
       </el-table-column>
     </el-table>
 
     <div style="display: flex; justify-content: flex-end; margin-top: 12px">
       <el-pagination
+        v-model:current-page="page.pageNo"
         layout="prev, pager, next"
         :page-size="page.pageSize"
         :total="total"
-        v-model:current-page="page.pageNo"
         @current-change="onPageChange"
       />
     </div>
@@ -124,6 +128,8 @@ const mapToRow = (user: UserListItem): UserRow => {
   }
 }
 
+const isAdminRow = (row: UserRow) => row.securityLevelForPatch === 0
+
 const loadUsers = async () => {
   loading.value = true
   try {
@@ -182,11 +188,21 @@ const onRoleChange = async (row: UserRow) => {
   }
 }
 
-const onStatusChange = async (row: UserRow) => {
+const onStatusChange = async (row: UserRow, value: string | number | boolean) => {
+  if (isAdminRow(row)) {
+    row.statusCode = 1
+    row.frozen = false
+    ElMessage.warning('管理员账号不支持冻结')
+    return
+  }
+
+  const nextStatus: UserStatusCode = value ? 1 : 0
+  row.statusCode = nextStatus
+
   try {
-    await apiPatchUserStatus({ id: row.userId, status: row.statusCode })
-    row.frozen = row.statusCode === 0
-    ElMessage.success(row.statusCode === 0 ? '已冻结' : '已解冻')
+    await apiPatchUserStatus({ id: row.userId, status: nextStatus })
+    row.frozen = nextStatus === 0
+    ElMessage.success(nextStatus === 0 ? '已冻结' : '已解冻')
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : '操作失败'
     ElMessage.error(msg)

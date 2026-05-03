@@ -66,7 +66,7 @@ export function apiPatchUserSecurityLevel(params: { id: number; securityLevel: 0
 }
 
 export interface AuthUserItem {
-  id?: number | string
+  id: number | string
   username: string
   securityLevel: 0 | 1 | 2
   departmentId: number
@@ -86,12 +86,16 @@ export async function apiAuthUsersQuery(): Promise<AuthUsersQueryResponse> {
   return { list }
 }
 
-export function mapAuthUserToUserListItem(u: AuthUserItem, index: number): UserListItem {
+export function mapAuthUserToUserListItem(u: AuthUserItem): UserListItem {
   const normalizedId = Number(u.id)
   const normalizedStatus = Number(u.status)
 
+  if (!Number.isFinite(normalizedId) || normalizedId <= 0) {
+    throw new Error(`用户 ${u.username} 缺少有效 id`)
+  }
+
   return {
-    userId: Number.isFinite(normalizedId) && normalizedId > 0 ? normalizedId : index + 1,
+    userId: normalizedId,
     username: u.username,
     dept: String(u.departmentId),
     role: (u.securityLevel === 0 ? 0 : 1) as UserRole,
