@@ -9,7 +9,8 @@
         <el-form-item label="报告类别">
           <el-select
             v-model="categoryId"
-            placeholder="请选择类别"
+            placeholder="全部类别"
+            clearable
             style="width: 320px"
             :loading="loadingCategories"
             :disabled="refreshing"
@@ -63,7 +64,7 @@
       />
       <el-input
         v-model="newKeyword"
-        placeholder="新增关键词（放到最上面）"
+        placeholder="新增关键词"
         style="width: 260px"
         clearable
         :disabled="refreshUiBusy"
@@ -123,6 +124,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { request, type RequestError } from '../api/http'
 import {
   apiAddKeyword,
+  apiQueryAllKeywords,
   apiQueryKeywords,
   apiRefreshReportKeywords,
   apiRemoveKeyword,
@@ -250,7 +252,7 @@ function resetRefreshStatusOnError() {
 function handleApiError(e: unknown, fallback: string) {
   const err = e as Partial<RequestError>
   if (err?.code === 403 || err?.code === 40302) {
-    ElMessage.error('无权限（需要管理员）')
+    ElMessage.error('无权限操作，需要管理员权限')
     return
   }
   const msg = e instanceof Error ? e.message : fallback
@@ -272,16 +274,16 @@ async function loadCategories() {
 }
 
 async function loadKeywords() {
-  const cid = categoryId.value
-  if (!cid || !Number.isFinite(cid)) {
-    keywords.value = []
-    return
-  }
-
   loadingKeywords.value = true
   try {
-    const data = await apiQueryKeywords(cid)
-    keywords.value = (data.keywords || []).map((keyword) => ({ keyword }))
+    if (categoryId.value && Number.isFinite(categoryId.value)) {
+      const data = await apiQueryKeywords(categoryId.value)
+      keywords.value = (data.keywords || []).map((keyword) => ({ keyword }))
+      return
+    }
+
+    const data = await apiQueryAllKeywords()
+    keywords.value = data.map((keyword) => ({ keyword }))
   } catch (e: unknown) {
     handleApiError(e, '加载关键词失败')
   } finally {
@@ -411,7 +413,9 @@ const submitEdit = async () => {
   }
 }
 
-onMounted(loadCategories)
+onMounted(async () => {
+  await Promise.all([loadCategories(), loadKeywords()])
+})
 
 onBeforeUnmount(() => {
   clearRefreshTimer()
